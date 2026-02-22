@@ -1,0 +1,35 @@
+{
+   "summary" : {
+      "category" : "MODERATE",
+      "score" : 25
+   },
+   "vulnerabilities" : [
+      {
+         "rule_id" : "PHP001",
+         "message" : "Use of eval() represents a major security risk",
+         "severity" : "HIGH",
+         "file" : "./test_project/test.php",
+         "fix" : "Refactor to avoid eval()",
+         "snippet" : "eval($vulnCode);",
+         "line" : 3
+      },
+      {
+         "rule_id" : "PHP003",
+         "message" : "Deprecated and unsafe mysql_query() usage",
+         "severity" : "HIGH",
+         "file" : "./test_project/test.php",
+         "snippet" : "mysql_query($query);",
+         "line" : 8,
+         "fix" : "Use PDO or MySQLi with prepared statements"
+      },
+      {
+         "message" : "Weak hashing algorithm md5() used",
+         "rule_id" : "PHP004",
+         "line" : 10,
+         "snippet" : "$pass = md5(\"password123\");",
+         "fix" : "Use password_hash() instead",
+         "severity" : "MEDIUM",
+         "file" : "./test_project/test.php"
+      }
+   ]
+}

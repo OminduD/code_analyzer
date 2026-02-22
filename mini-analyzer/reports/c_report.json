@@ -1,0 +1,53 @@
+{
+   "vulnerabilities" : [
+      {
+         "rule_id" : "C001",
+         "severity" : "HIGH",
+         "fix" : "Use fgets() instead",
+         "file" : "./test_project/test.c",
+         "snippet" : "gets(buffer);",
+         "line" : 7,
+         "message" : "Use of unsafe function gets()"
+      },
+      {
+         "fix" : "Use strncpy() instead",
+         "severity" : "HIGH",
+         "rule_id" : "C002",
+         "snippet" : "strcpy(dest, buffer);",
+         "line" : 10,
+         "file" : "./test_project/test.c",
+         "message" : "Use of unsafe function strcpy()"
+      },
+      {
+         "fix" : "Use snprintf() instead",
+         "severity" : "MEDIUM",
+         "rule_id" : "C003",
+         "message" : "Potential buffer overflow with sprintf()",
+         "snippet" : "sprintf(out, \"Input: %s\", dest);",
+         "line" : 13,
+         "file" : "./test_project/test.c"
+      },
+      {
+         "fix" : "Use exec() family functions instead",
+         "severity" : "HIGH",
+         "rule_id" : "C004",
+         "line" : 15,
+         "snippet" : "system(\"ls -la\");",
+         "file" : "./test_project/test.c",
+         "message" : "Use of system() can lead to command injection"
+      },
+      {
+         "file" : "./test_project/test.c",
+         "snippet" : "char *password = \"secret123\";",
+         "line" : 17,
+         "message" : "Hardcoded password detected",
+         "rule_id" : "C005",
+         "fix" : "Use environment variables or secure vault",
+         "severity" : "HIGH"
+      }
+   ],
+   "summary" : {
+      "score" : 45,
+      "category" : "CRITICAL"
+   }
+}
