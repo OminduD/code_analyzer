@@ -18,6 +18,7 @@ my $lang;
 my $json_out;
 my $html_out;
 my $severity_filter;
+my $serve;
 
 GetOptions(
     "path=s"     => \$path,
@@ -25,10 +26,15 @@ GetOptions(
     "json=s"     => \$json_out,
     "html=s"     => \$html_out,
     "severity=s" => \$severity_filter,
+    "serve"      => \$serve,
 ) or die "Error parsing command line arguments\n";
 
 if (!$path || !$lang) {
-    die "Usage: $0 --path <dir> --lang <c|cpp|php|python|js|java|rust|go|lua|asm|ada|cobol|pascal> [--json report.json] [--html report.html] [--severity <LOW|MEDIUM|HIGH>]\n";
+    die "Usage: $0 --path <dir> --lang <c|cpp|php|python|js|java|rust|go|lua|asm|ada|cobol|pascal> [--json report.json] [--html report.html] [--severity <LOW|MEDIUM|HIGH>] [--serve]\n";
+}
+
+if ($serve && !$html_out) {
+    $html_out = "report.html";
 }
 
 # Determine rules directory
@@ -96,6 +102,14 @@ if ($json_out) {
 
 if ($html_out) {
     Reporter::generate_html(\@all_vulnerabilities, $score_data, \%metadata, $html_out);
+}
+
+if ($serve) {
+    my $port = 8000 + int(rand(1000));
+    print "\nStarting local web server to view report...\n";
+    print "View your HTML report at: http://localhost:$port/$html_out\n";
+    print "(Press Ctrl+C to stop the server)\n";
+    system("python3 -m http.server $port");
 }
 
 exit 0;
