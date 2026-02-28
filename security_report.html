@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Security Audit Report | /home/omindu/Documents/Python/CipherPop/src</title>
+    <title>Security Audit Report | dummy_logic</title>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght;500;600;700&family=JetBrains+Mono:wght;500&display=swap" rel="stylesheet">
@@ -101,16 +101,16 @@
         
         <div class="header-section">
             <div>
-                <h1>Perl Security Analyzer <span class="title-badge">all</span></h1>
+                <h1>Perl Security Analyzer <span class="title-badge">python</span></h1>
                 <p style="color: var(--text-muted); margin: 0;">Advanced Static Code Analysis Output</p>
             </div>
             
             <div class="metadata-grid">
-                <div class="metadata-item">Target Context<span>/home/omindu/Documents/Python/CipherPop/src</span></div>
-                <div class="metadata-item">Files Processed<span>2</span></div>
-                <div class="metadata-item">Lines of Code<span>745</span></div>
+                <div class="metadata-item">Target Context<span>dummy_logic</span></div>
+                <div class="metadata-item">Files Processed<span>1</span></div>
+                <div class="metadata-item">Lines of Code<span>6</span></div>
                 <div class="metadata-item">Scan Duration<span>1s</span></div>
-                <div class="metadata-item" style="grid-column: span 2;">Analysis Timestamp<span>Sat Feb 28 23:35:30 2026</span></div>
+                <div class="metadata-item" style="grid-column: span 2;">Analysis Timestamp<span>Sat Feb 28 23:47:09 2026</span></div>
             </div>
         </div>
         
@@ -120,7 +120,7 @@
                 <h2>Threat Assessment</h2>
                 <div class="score-display">
                     <div style="font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase;">Total Risk Score</div>
-                    <div class="score-value cat-low">5</div>
+                    <div class="score-value cat-low">0</div>
                     <div style="font-size: 0.95rem; font-weight: 600; text-transform: uppercase;" class="cat-low">LOW RISK</div>
                 </div>
                 
@@ -131,7 +131,7 @@
                     </div>
                     <div class="stat-card stat-medium" onclick="filterTable('medium', this)">
                         <div class="card-label">Medium</div>
-                        <div class="card-value">1</div>
+                        <div class="card-value">0</div>
                     </div>
                     <div class="stat-card stat-low" onclick="filterTable('low', this)">
                         <div class="card-label">Low</div>
@@ -185,13 +185,21 @@
                     </tr>
                 </thead>
                 <tbody>
-                                <tr class="vuln-row" data-severity="medium">
-                <td title="/home/omindu/Documents/Python/CipherPop/src/CipherPop.py"><strong>CipherPop.py</strong><br><span style="color:#7f8c8d; font-size:0.85em;">Line 803</span></td>
-                <td><span class="rule-badge">PY007</span></td>
-                <td><span class="sev-medium">MEDIUM</span></td>
-                <td>Potential infinite loop detected</td>
-                <td><code>while True:</code></td>
-                <td>Ensure the loop has a clear exit condition</td>
+                                <tr class="vuln-row" data-severity="critical">
+                <td title="dummy_logic/logic.py"><strong>logic.py</strong><br><span style="color:#7f8c8d; font-size:0.85em;">Line 4</span></td>
+                <td><span class="rule-badge">PY008</span></td>
+                <td><span class="sev-critical">CRITICAL</span></td>
+                <td>Uncontrolled Recursion (Stack Overflow): &#39;safe_recursive_call&#39; calls itself without a prior conditional base-case.</td>
+                <td><code>    return n + safe_recursive_call(n - 1)</code></td>
+                <td>Ensure the recursion has a proper conditional base case (if) to avoid RecursionError.</td>
+            </tr>
+            <tr class="vuln-row" data-severity="critical">
+                <td title="dummy_logic/logic.py"><strong>logic.py</strong><br><span style="color:#7f8c8d; font-size:0.85em;">Line 7</span></td>
+                <td><span class="rule-badge">PY008</span></td>
+                <td><span class="sev-critical">CRITICAL</span></td>
+                <td>Uncontrolled Recursion (Stack Overflow): &#39;uncontrolled_recursive_call&#39; calls itself without a prior conditional base-case.</td>
+                <td><code>    return n + uncontrolled_recursive_call(n + 1)</code></td>
+                <td>Ensure the recursion has a proper conditional base case (if) to avoid RecursionError.</td>
             </tr>
 
                 </tbody>
@@ -205,11 +213,11 @@
 
     <script>
         // Data populated from Perl
-        const severityData = [0, 1, 0];
-        const ruleLabels = ['PY007'];
-        const ruleData = [1];
-        const fileLabels = ['CipherPop.py'];
-        const fileData = [1];
+        const severityData = [0, 0, 0];
+        const ruleLabels = ['PY008'];
+        const ruleData = [2];
+        const fileLabels = ['logic.py'];
+        const fileData = [2];
         
         // Setup Chart defaults
         Chart.defaults.color = '#94a3b8';
