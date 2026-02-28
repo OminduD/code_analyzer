@@ -26,5 +26,19 @@
         message  => "Hardcoded API key or secret detected",
         severity => "HIGH",
         fix      => "Use environment variables or a configuration manager",
+    },
+    {
+        id       => "PY005",
+        pattern  => qr/\byaml\.load\s*\(/,
+        message  => "Unsafe YAML deserialization",
+        severity => "HIGH",
+        fix      => "Use yaml.safe_load() instead of yaml.load()",
+    },
+    {
+        id       => "PY006",
+        pattern  => qr/\bhashlib\.(md5|sha1)\s*\(/,
+        message  => "Use of weak cryptographic hash function (MD5 or SHA1)",
+        severity => "MEDIUM",
+        fix      => "Use stronger hashing algorithms like SHA-256",
     }
 ]
