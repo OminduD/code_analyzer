@@ -34,8 +34,11 @@ sub scan_directory {
         'haskell' => qr/\.(?:hs|lhs)$/,
     );
     
-    my $ext_regex = $extensions{lc($lang)};
-    die "Unsupported language: $lang\n" unless $ext_regex;
+    my $ext_regex;
+    if (lc($lang) ne 'all') {
+        $ext_regex = $extensions{lc($lang)};
+        die "Unsupported language: $lang\n" unless $ext_regex;
+    }
 
     my @files;
     
@@ -49,9 +52,22 @@ sub scan_directory {
             return;
         }
         
-        # Match files by extension
-        if (-f $file && $file =~ /$ext_regex/) {
-            push @files, $File::Find::name;
+        if (-f $file) {
+            if ($ext_regex) {
+                # Single language mode
+                if ($file =~ /$ext_regex/) {
+                    push @files, { path => $File::Find::name, lang => lc($lang) };
+                }
+            } else {
+                # 'all' language mode
+                foreach my $l (keys %extensions) {
+                    my $regex = $extensions{$l};
+                    if ($file =~ /$regex/) {
+                        push @files, { path => $File::Find::name, lang => $l };
+                        last; # Break out of inner loop once matched
+                    }
+                }
+            }
         }
     };
     
