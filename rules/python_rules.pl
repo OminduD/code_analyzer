@@ -68,43 +68,43 @@
             my $line    = $token->{line_num};
 
             # Detect function definition: def my_func(args):
-            if ($content =~ /^def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/) {
-                # $func_indent is no longer strictly reliable due to Tokenizer stripping whitespace.
-                # We will rely on naive matching for python for now (similar to C bracing)
-                $current_func = $1;
+            if ($content =~ /^(\s*)def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/) {
+                $func_indent = length($1);
+                $current_func = $2;
                 $has_base_case = 0;
                 return undef;
             }
 
             # If we are inside a function
             if ($current_func) {
-                # Simple check - if a line defines a new function or class, we exited the function
-                if ($content =~ /^(def|class)\b/ && $content !~ /^def\s+$current_func\s*\(/) {
+                # Simple indentation check - if a line has less or equal indentation and is not empty, we exited the function
+                # Note: We must also ignore lines that define another function.
+                if ($content =~ /^(\s*)\S/ && length($1) <= $func_indent && $content !~ /^\s*def\s+/) {
                     $current_func = "";
                     $has_base_case = 0;
-                } else {
-                    # Look for base-case patterns (if, return) within the function
-                    # Python specific: often `if condition:` or `elif condition:`
-                    if ($content =~ /^(?:if|elif)\s+/) {
-                        $has_base_case = 1;
-                    }
+                    return undef;
+                }
+                
+                # Look for base-case patterns (if, elif) within the function
+                if ($content =~ /^\s*(?:if|elif)\b/) {
+                    $has_base_case = 1;
+                }
 
-                    # Recursive call
-                    if ($content =~ /\b$current_func\s*\(/) {
-                        if (!$has_base_case) {
-                            return {
-                                file     => $file,
-                                line     => $line,
-                                rule_id  => "PY008",
-                                message  => "Uncontrolled Recursion (Stack Overflow): '$current_func' calls itself without a prior conditional base-case.",
-                                severity => "CRITICAL",
-                                fix      => "Ensure the recursion has a proper conditional base case (if) to avoid RecursionError.",
-                                snippet  => $content,
-                            };
-                        } else {
-                            # It has an if statement. We assume it's safe for now.
-                            return undef;
-                        }
+                # Recursive call
+                if ($content =~ /\b$current_func\s*\(/) {
+                    if (!$has_base_case) {
+                        return {
+                            file     => $file,
+                            line     => $line,
+                            rule_id  => "PY008",
+                            message  => "Uncontrolled Recursion (Stack Overflow): '$current_func' calls itself without a prior conditional base-case.",
+                            severity => "CRITICAL",
+                            fix      => "Ensure the recursion has a proper conditional base case (if) to avoid RecursionError.",
+                            snippet  => $content,
+                        };
+                    } else {
+                        # It has an if statement. We assume it's safe for now.
+                        return undef;
                     }
                 }
             }
