@@ -33,5 +33,19 @@
         message  => "Hardcoded password detected",
         severity => "HIGH",
         fix      => "Use environment variables or secure vault",
+    },
+    {
+        id       => "C006",
+        pattern  => qr/\bscanf\s*\(\s*["'][^"']*\%s/,
+        message  => "Potential buffer overflow with scanf() relying on %s without width limits",
+        severity => "HIGH",
+        fix      => "Specify maximum field width, e.g., %255s",
+    },
+    {
+        id       => "C007",
+        pattern  => qr/\brand\s*\(/,
+        message  => "Use of insecure pseudo-random number generator rand()",
+        severity => "MEDIUM",
+        fix      => "Use more secure alternatives or cryptographically secure generators",
     }
 ]
