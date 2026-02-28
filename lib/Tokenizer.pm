@@ -19,7 +19,7 @@ sub tokenize_file {
         my $line_num = $i + 1;
         
         # Strip comments based on language
-        if ($lang eq 'c' || $lang eq 'php') {
+        if ($lang eq 'c' || $lang eq 'php' || $lang eq 'js' || $lang eq 'java') {
             # Strip block comments
             if ($in_block_comment) {
                 if ($line =~ s/^.*?\*\///) {
