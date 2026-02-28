@@ -47,5 +47,109 @@
         message  => "Use of insecure pseudo-random number generator rand()",
         severity => "MEDIUM",
         fix      => "Use more secure alternatives or cryptographically secure generators",
+    },
+    {
+        id       => "C008",
+        pattern  => qr/\b(?:while\s*\(\s*1\s*\)|while\s*\(\s*true\s*\)|for\s*\(\s*;\s*;\s*\))/,
+        message  => "Potential infinite loop detected",
+        severity => "MEDIUM",
+        fix      => "Ensure the loop has a clear exit condition",
+    },
+    {
+        # Memory Leak Detection
+        id         => "C009",
+        match_func => sub {
+            my ($file, $token, $vulnerabilities) = @_;
+            our %allocations;
+            our %last_file;
+
+            # Reset state for a new file
+            if (!$last_file{c_mem} || $last_file{c_mem} ne $file) {
+                %allocations = ();
+                $last_file{c_mem} = $file;
+            }
+
+            my $content = $token->{content};
+            my $line    = $token->{line_num};
+
+            # Track malloc/calloc/realloc
+            if ($content =~ /\b([a-zA-Z0-9_]+)\s*=\s*(?:[a-zA-Z0-9_\s\*]*\))?\s*(?:malloc|calloc|realloc)\s*\(/) {
+                my $var = $1;
+                $allocations{$var} = $line;
+            }
+
+            # Track free
+            if ($content =~ /\bfree\s*\(\s*([a-zA-Z0-9_]+)\s*\)/) {
+                my $var = $1;
+                delete $allocations{$var} if exists $allocations{$var};
+            }
+
+            # If we reach the end of the file in the analyzer loop, we should ideally check remaining allocations.
+            # However, for simplicity per-token, we'll flag any new allocation that overwrites an un-freed one.
+            if ($content =~ /\b([a-zA-Z0-9_]+)\s*=\s*(?:[a-zA-Z0-9_\s\*]*\))?\s*(?:malloc|calloc|realloc)\s*\(/) {
+                my $var = $1;
+                if (exists $allocations{$var} && $allocations{$var} != $line) {
+                    my $old_line = $allocations{$var};
+                    return {
+                        file     => $file,
+                        line     => $line,
+                        rule_id  => "C009",
+                        message  => "Potential Memory Leak: '$var' allocated at line $old_line is reallocated or not freed.",
+                        severity => "HIGH",
+                        fix      => "Ensure every malloc/calloc is paired with a free()",
+                        snippet  => $content,
+                    };
+                }
+            }
+            return undef;
+        }
+    },
+    {
+        # Recursion Detection
+        id         => "C010",
+        match_func => sub {
+            my ($file, $token, $vulnerabilities) = @_;
+            our $current_func;
+            our %last_file;
+
+            if (!$last_file{c_rec} || $last_file{c_rec} ne $file) {
+                $current_func = "";
+                $last_file{c_rec} = $file;
+            }
+
+            my $content = $token->{content};
+            my $line    = $token->{line_num};
+
+            # Very basic C function definition extraction: type name(args) { ...
+            if ($content =~ /^[a-zA-Z_][a-zA-Z0-9_\s\*]*\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\([^;]*$/) {
+                # Ignoring function prototypes (ends with ;) 
+                # This regex is highly simplified and assumes the `{` is on the same line or doesn't end in `;`
+                if ($content !~ /;\s*$/) {
+                    $current_func = $1;
+                }
+            }
+
+            if ($current_func && $content =~ /\b$current_func\s*\(/) {
+                # Don't flag the definition line itself
+                if ($content !~ /^[a-zA-Z_][a-zA-Z0-9_\s\*]*\s+$current_func\s*\(/) {
+                    return {
+                        file     => $file,
+                        line     => $line,
+                        rule_id  => "C010",
+                        message  => "Recursive function call detected: '$current_func' calls itself.",
+                        severity => "LOW",
+                        fix      => "Ensure the recursion has a proper base case to avoid stack overflow.",
+                        snippet  => $content,
+                    };
+                }
+            }
+
+            # Basic reset at end of brace (very naive)
+            if ($content =~ /^}\s*$/) {
+                $current_func = "";
+            }
+
+            return undef;
+        }
     }
 ]
