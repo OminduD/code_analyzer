@@ -104,9 +104,20 @@ sub tokenize_file {
         }
         
         # Normalize whitespace
-        $line =~ s/^\s+//;
-        $line =~ s/\s+$//;
+        if ($lang eq 'python') {
+            # Python relies on indentation, only strip trailing whitespace
+            $line =~ s/\s+$//;
+        } else {
+            # Strip both leading and trailing for other languages
+            $line =~ s/^\s+//;
+            $line =~ s/\s+$//;
+        }
         
+        # In Python, we might have fully empty lines (just whitespace) after trailing strip
+        if ($lang eq 'python' && $line =~ /^\s*$/) {
+            $line = '';
+        }
+
         if (length($line) > 0) {
             push @tokens, {
                 line_num => $line_num,
