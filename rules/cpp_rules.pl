@@ -14,11 +14,76 @@
         fix      => "Avoid system() calls, use exec family or safer native APIs",
     },
     {
-        id       => "CPP003",
-        pattern  => qr/\b(?:while\s*\(\s*1\s*\)|while\s*\(\s*true\s*\)|for\s*\(\s*;\s*;\s*\))/,
-        message  => "Potential infinite loop detected",
-        severity => "MEDIUM",
-        fix      => "Ensure the loop has a clear exit condition",
+        # Advanced Infinite Loop Detection
+        id         => "CPP003",
+        match_func => sub {
+            my ($file, $token, $vulnerabilities) = @_;
+            my $content = $token->{content};
+            my $line    = $token->{line_num};
+
+            # Standard simple checks
+            if ($content =~ /\b(?:while\s*\(\s*1\s*\)|while\s*\(\s*true\s*\)|for\s*\(\s*;\s*;\s*\))/) {
+                return {
+                    file     => $file,
+                    line     => $line,
+                    rule_id  => "CPP003",
+                    message  => "Potential infinite loop detected (hardcoded loop condition).",
+                    severity => "MEDIUM",
+                    fix      => "Ensure the loop has a clear exit condition",
+                    snippet  => $content,
+                };
+            }
+
+            # Advanced For-Loop checks
+            # Parse components: for (init; condition; increment)
+            if ($content =~ /\bfor\s*\(\s*[^;]*;\s*([a-zA-Z0-9_]+)\s*(?:<|>|<=|>=|!=|==)\s*[^;]+;\s*([a-zA-Z0-9_\-\+]+)\s*\)/) {
+                my $cond_var = $1;
+                my $inc_stmt = $2;
+
+                # Mismatched Loop Variables (e.g. for(int i=0; j<10; i++))
+                if ($inc_stmt =~ /([a-zA-Z0-9_]+)/) {
+                    my $inc_var = $1;
+                    if ($cond_var ne $inc_var) {
+                        return {
+                            file     => $file,
+                            line     => $line,
+                            rule_id  => "CPP003",
+                            message  => "Infinite Loop: The loop condition variable '$cond_var' does not match the incremented variable '$inc_var'.",
+                            severity => "HIGH",
+                            fix      => "Ensure the correct variable is incremented/decremented to meet the exit condition.",
+                            snippet  => $content,
+                        };
+                    }
+                }
+
+                # Wrong Direction Loop (e.g. for(int i=0; i<10; i--))
+                # Using naive regex to catch common mistakes for now.
+                if ($content =~ /\bfor\s*\([^;]*;\s*[a-zA-Z0-9_]+\s*<\s*[^;]+;\s*[a-zA-Z0-9_]+--\s*\)/) {
+                    return {
+                        file     => $file,
+                        line     => $line,
+                        rule_id  => "CPP003",
+                        message  => "Infinite Loop: Loop increments away from the exit condition (checks < but uses --).",
+                        severity => "HIGH",
+                        fix      => "Reverse the increment direction to approach the exit condition.",
+                        snippet  => $content,
+                    };
+                }
+                if ($content =~ /\bfor\s*\([^;]*;\s*[a-zA-Z0-9_]+\s*>\s*[^;]+;\s*[a-zA-Z0-9_]+\+\+\s*\)/) {
+                    return {
+                        file     => $file,
+                        line     => $line,
+                        rule_id  => "CPP003",
+                        message  => "Infinite Loop: Loop increments away from the exit condition (checks > but uses ++).",
+                        severity => "HIGH",
+                        fix      => "Reverse the increment direction to approach the exit condition.",
+                        snippet  => $content,
+                    };
+                }
+            }
+
+            return undef;
+        }
     },
     {
         # Memory Leak Detection
