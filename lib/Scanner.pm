@@ -22,6 +22,16 @@ sub scan_directory {
         'ada'    => qr/\.(?:adb|ads)$/,
         'cobol'  => qr/\.(?:cbl|cob|cpy)$/,
         'pascal' => qr/\.(?:pas|inc)$/,
+        'ruby'   => qr/\.rb$/,
+        'csharp' => qr/\.cs$/,
+        'r'      => qr/\.(?:R|r)$/,
+        'swift'  => qr/\.swift$/,
+        'kotlin' => qr/\.kt[s]?$/,
+        'typescript' => qr/\.ts$/,
+        'scala'  => qr/\.scala$/,
+        'perl'   => qr/\.(?:pl|pm|t)$/,
+        'bash'   => qr/\.sh$/,
+        'haskell' => qr/\.(?:hs|lhs)$/,
     );
     
     my $ext_regex = $extensions{lc($lang)};
