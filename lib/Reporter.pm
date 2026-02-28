@@ -88,6 +88,7 @@ sub generate_html {
     my $vuln_rows = '';
     my %counts = ( HIGH => 0, MEDIUM => 0, LOW => 0 );
     my %rule_counts;
+    my %file_counts;
     
     foreach my $vuln (@$vulnerabilities) {
         my $sev = uc($vuln->{severity});
@@ -98,6 +99,7 @@ sub generate_html {
         
         my $sev_class = lc($sev);
         my $file_name = basename($vuln->{file});
+        $file_counts{$file_name}++;
         
         # Escape HTML manually to avoid dependencies
         my $snippet = _escape_html($vuln->{snippet});
@@ -122,6 +124,13 @@ HTML
     
     my $top_rules_labels = "[" . join(",", map { "'$_'" } @top_rules) . "]";
     my $top_rules_data   = "[" . join(",", map { $rule_counts{$_} } @top_rules) . "]";
+
+    # Sort top vulnerable files
+    my @top_files = sort { $file_counts{$b} <=> $file_counts{$a} } keys %file_counts;
+    @top_files = splice(@top_files, 0, 5) if @top_files > 5;
+    
+    my $top_files_labels = "[" . join(",", map { "'$_'" } @top_files) . "]";
+    my $top_files_data   = "[" . join(",", map { $file_counts{$_} } @top_files) . "]";
 
     my $cat_class = lc($score_data->{category});
     my $score = $score_data->{score};
@@ -193,7 +202,7 @@ HTML
         .stat-low .card-value { color: var(--low); }
         
         /* Chart container */
-        .charts-container { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        .charts-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
         .chart-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; }
         .chart-box h3 { font-size: 1rem; color: var(--text-muted); margin: 0 0 16px 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
         .chart-wrapper { position: relative; height: 260px; width: 100%; flex-grow: 1; display:flex; justify-content:center; align-items:center; }
@@ -238,6 +247,8 @@ HTML
             <div class="metadata-grid">
                 <div class="metadata-item">Target Context<span>$metadata->{target_path}</span></div>
                 <div class="metadata-item">Files Processed<span>$metadata->{files_scanned}</span></div>
+                <div class="metadata-item">Lines of Code<span>$metadata->{total_loc}</span></div>
+                <div class="metadata-item">Scan Duration<span>$metadata->{duration_secs}s</span></div>
                 <div class="metadata-item" style="grid-column: span 2;">Analysis Timestamp<span>$metadata->{timestamp}</span></div>
             </div>
         </div>
@@ -283,6 +294,12 @@ HTML
                         <canvas id="rulesChart"></canvas>
                     </div>
                 </div>
+                <div class="chart-box">
+                    <h3>Top Vulnerable Files</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="filesChart"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -322,6 +339,8 @@ HTML
         const severityData = [$counts{HIGH}, $counts{MEDIUM}, $counts{LOW}];
         const ruleLabels = $top_rules_labels;
         const ruleData = $top_rules_data;
+        const fileLabels = $top_files_labels;
+        const fileData = $top_files_data;
         
         // Setup Chart defaults
         Chart.defaults.color = '#94a3b8';
@@ -375,6 +394,49 @@ HTML
                     label: 'Occurrences',
                     data: ruleData,
                     backgroundColor: '#0ea5e9',
+                    borderRadius: 4,
+                    barThickness: 'flex',
+                    maxBarThickness: 40
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1e293b',
+                        titleColor: '#f8fafc',
+                        bodyColor: '#f8fafc',
+                        borderColor: '#334155',
+                        borderWidth: 1,
+                        padding: 12
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false, drawBorder: false },
+                        ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 } }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false },
+                        ticks: { stepSize: 1, precision: 0 }
+                    }
+                }
+            }
+        });
+
+        // 3. Top Files Bar Chart
+        const ctxFiles = document.getElementById('filesChart').getContext('2d');
+        new Chart(ctxFiles, {
+            type: 'bar',
+            data: {
+                labels: fileLabels,
+                datasets: [{
+                    label: 'Vulnerabilities',
+                    data: fileData,
+                    backgroundColor: '#eab308',
                     borderRadius: 4,
                     barThickness: 'flex',
                     maxBarThickness: 40
