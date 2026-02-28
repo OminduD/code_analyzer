@@ -12,6 +12,8 @@ sub scan_directory {
         'c'      => qr/\.c$/,
         'php'    => qr/\.php$/,
         'python' => qr/\.py$/,
+        'js'     => qr/\.js$/,
+        'java'   => qr/\.java$/,
     );
     
     my $ext_regex = $extensions{lc($lang)};
