@@ -12,6 +12,7 @@ use Tokenizer;
 use RuleEngine;
 use Scorer;
 use Reporter;
+use Term::ANSIColor;
 
 my $path;
 my $lang;
@@ -31,10 +32,6 @@ GetOptions(
 
 if (!$path || !$lang) {
     die "Usage: $0 --path <dir> --lang <c|cpp|php|python|js|java|rust|go|lua|asm|ada|cobol|pascal> [--json report.json] [--html report.html] [--severity <LOW|MEDIUM|HIGH>] [--serve]\n";
-}
-
-if ($serve && !$html_out) {
-    $html_out = "report.html";
 }
 
 # Determine rules directory
@@ -100,16 +97,21 @@ if ($json_out) {
     Reporter::generate_json(\@all_vulnerabilities, $score_data, \%metadata, $json_out);
 }
 
-if ($html_out) {
-    Reporter::generate_html(\@all_vulnerabilities, $score_data, \%metadata, $html_out);
-}
+# Always generate HTML report
+$html_out ||= "security_report.html";
+Reporter::generate_html(\@all_vulnerabilities, $score_data, \%metadata, $html_out);
+
+my $abs_path = File::Spec->rel2abs($html_out);
+print color('bold bright_green'), "\n 📊 Web Report Generated!\n", color('reset');
+print " 🔗 Local File: ", color('bold underline cyan'), "file://$abs_path", color('reset'), "\n";
 
 if ($serve) {
-    my $port = 8000 + int(rand(1000));
-    print "\nStarting local web server to view report...\n";
-    print "View your HTML report at: http://localhost:$port/$html_out\n";
-    print "(Press Ctrl+C to stop the server)\n";
-    system("python3 -m http.server $port");
+    print color('bold magenta'), "\n 🚀 Starting local Web Server...\n", color('reset');
+    print color('bright_green'), " 🌐 Dashboard available at: ", color('bold underline cyan'), "http://localhost:8000/$html_out", color('reset'), "\n\n";
+    print color('bright_black'), " Press Ctrl+C to stop the server.\n\n", color('reset');
+    system("python3 -m http.server 8000");
+} else {
+    print color('bright_black'), "\n 💡 Tip: Use --serve to open the report via a local web server (Python).\n\n", color('reset');
 }
 
 exit 0;
