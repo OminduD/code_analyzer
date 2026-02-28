@@ -49,11 +49,76 @@
         fix      => "Use more secure alternatives or cryptographically secure generators",
     },
     {
-        id       => "C008",
-        pattern  => qr/\b(?:while\s*\(\s*1\s*\)|while\s*\(\s*true\s*\)|for\s*\(\s*;\s*;\s*\))/,
-        message  => "Potential infinite loop detected",
-        severity => "MEDIUM",
-        fix      => "Ensure the loop has a clear exit condition",
+        # Advanced Infinite Loop Detection
+        id         => "C008",
+        match_func => sub {
+            my ($file, $token, $vulnerabilities) = @_;
+            my $content = $token->{content};
+            my $line    = $token->{line_num};
+
+            # Standard simple checks
+            if ($content =~ /\b(?:while\s*\(\s*1\s*\)|while\s*\(\s*true\s*\)|for\s*\(\s*;\s*;\s*\))/) {
+                return {
+                    file     => $file,
+                    line     => $line,
+                    rule_id  => "C008",
+                    message  => "Potential infinite loop detected (hardcoded loop condition).",
+                    severity => "MEDIUM",
+                    fix      => "Ensure the loop has a clear exit condition",
+                    snippet  => $content,
+                };
+            }
+
+            # Advanced For-Loop checks
+            # Parse components: for (init; condition; increment)
+            if ($content =~ /\bfor\s*\(\s*[^;]*;\s*([a-zA-Z0-9_]+)\s*(?:<|>|<=|>=|!=|==)\s*[^;]+;\s*([a-zA-Z0-9_\-\+]+)\s*\)/) {
+                my $cond_var = $1;
+                my $inc_stmt = $2;
+
+                # Mismatched Loop Variables (e.g. for(int i=0; j<10; i++))
+                if ($inc_stmt =~ /([a-zA-Z0-9_]+)/) {
+                    my $inc_var = $1;
+                    if ($cond_var ne $inc_var) {
+                        return {
+                            file     => $file,
+                            line     => $line,
+                            rule_id  => "C008",
+                            message  => "Infinite Loop: The loop condition variable '$cond_var' does not match the incremented variable '$inc_var'.",
+                            severity => "HIGH",
+                            fix      => "Ensure the correct variable is incremented/decremented to meet the exit condition.",
+                            snippet  => $content,
+                        };
+                    }
+                }
+
+                # Wrong Direction Loop (e.g. for(int i=0; i<10; i--))
+                # Using naive regex to catch common mistakes for now.
+                if ($content =~ /\bfor\s*\([^;]*;\s*[a-zA-Z0-9_]+\s*<\s*[^;]+;\s*[a-zA-Z0-9_]+--\s*\)/) {
+                    return {
+                        file     => $file,
+                        line     => $line,
+                        rule_id  => "C008",
+                        message  => "Infinite Loop: Loop increments away from the exit condition (checks < but uses --).",
+                        severity => "HIGH",
+                        fix      => "Reverse the increment direction to approach the exit condition.",
+                        snippet  => $content,
+                    };
+                }
+                if ($content =~ /\bfor\s*\([^;]*;\s*[a-zA-Z0-9_]+\s*>\s*[^;]+;\s*[a-zA-Z0-9_]+\+\+\s*\)/) {
+                    return {
+                        file     => $file,
+                        line     => $line,
+                        rule_id  => "C008",
+                        message  => "Infinite Loop: Loop increments away from the exit condition (checks > but uses ++).",
+                        severity => "HIGH",
+                        fix      => "Reverse the increment direction to approach the exit condition.",
+                        snippet  => $content,
+                    };
+                }
+            }
+
+            return undef;
+        }
     },
     {
         # Memory Leak Detection
@@ -105,15 +170,17 @@
         }
     },
     {
-        # Recursion Detection
+        # Advanced Recursion Detection
         id         => "C010",
         match_func => sub {
             my ($file, $token, $vulnerabilities) = @_;
             our $current_func;
             our %last_file;
+            our $has_base_case = 0;
 
             if (!$last_file{c_rec} || $last_file{c_rec} ne $file) {
                 $current_func = "";
+                $has_base_case = 0;
                 $last_file{c_rec} = $file;
             }
 
@@ -122,31 +189,46 @@
 
             # Very basic C function definition extraction: type name(args) { ...
             if ($content =~ /^[a-zA-Z_][a-zA-Z0-9_\s\*]*\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\([^;]*$/) {
-                # Ignoring function prototypes (ends with ;) 
-                # This regex is highly simplified and assumes the `{` is on the same line or doesn't end in `;`
                 if ($content !~ /;\s*$/) {
-                    $current_func = $1;
+                    $current_func  = $1;
+                    $has_base_case = 0;
                 }
             }
 
-            if ($current_func && $content =~ /\b$current_func\s*\(/) {
-                # Don't flag the definition line itself
-                if ($content !~ /^[a-zA-Z_][a-zA-Z0-9_\s\*]*\s+$current_func\s*\(/) {
-                    return {
-                        file     => $file,
-                        line     => $line,
-                        rule_id  => "C010",
-                        message  => "Recursive function call detected: '$current_func' calls itself.",
-                        severity => "LOW",
-                        fix      => "Ensure the recursion has a proper base case to avoid stack overflow.",
-                        snippet  => $content,
-                    };
+            if ($current_func) {
+                # Look for typical base-case mechanisms (if statements or return)
+                if ($content =~ /\b(if|return)\b/) {
+                    $has_base_case = 1;
+                }
+
+                # Recursive function call
+                if ($content =~ /\b$current_func\s*\(/) {
+                    # Don't flag the definition line itself
+                    if ($content !~ /^[a-zA-Z_][a-zA-Z0-9_\s\*]*\s+$current_func\s*\(/) {
+                        
+                        if (!$has_base_case) {
+                            return {
+                                file     => $file,
+                                line     => $line,
+                                rule_id  => "C010",
+                                message  => "Uncontrolled Recursion (Stack Overflow): '$current_func' calls itself without a prior base-case check (if/return).",
+                                severity => "CRITICAL",
+                                fix      => "Add a conditional base case (e.g. `if (condition) return;`) before recursing.",
+                                snippet  => $content,
+                            };
+                        } else {
+                            # It is recursive, but has an `if` so we treat it as potentially safe
+                            # Return undef to hide it entirely, or return a LOW warning. Let's hide it to reduce false positives.
+                            return undef;
+                        }
+                    }
                 }
             }
 
             # Basic reset at end of brace (very naive)
             if ($content =~ /^}\s*$/) {
-                $current_func = "";
+                $current_func  = "";
+                $has_base_case = 0;
             }
 
             return undef;
