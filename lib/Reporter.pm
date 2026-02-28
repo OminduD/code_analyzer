@@ -9,49 +9,59 @@ use File::Basename;
 sub print_terminal {
     my ($vulnerabilities, $score_data, $metadata) = @_;
     
-    print color('bold cyan'), "\n" . "=" x 60 . "\n";
-    print " PERL STATIC CODE SECURITY ANALYZER\n";
-    print "=" x 60 . "\n", color('reset');
+    print color('bold cyan');
+    print "\n";
+    print " ╔══════════════════════════════════════════════════════════════╗\n";
+    print " ║                                                              ║\n";
+    print " ║           PERL STATIC CODE SECURITY ANALYZER                 ║\n";
+    print " ║                  Advanced Analysis Tool                      ║\n";
+    print " ║                                                              ║\n";
+    print " ╚══════════════════════════════════════════════════════════════╝\n";
+    print color('reset');
     
     if ($metadata) {
         print color('bright_black');
-        print " Date         : $metadata->{timestamp}\n";
-        print " Target Path  : $metadata->{target_path}\n";
-        print " Language     : " . uc($metadata->{language}) . "\n";
-        print " Files Scanned: $metadata->{files_scanned}\n";
-        print color('reset'), "-" x 60 . "\n\n";
+        print " ┌─[ Scan Metadata ]────────────────────────────────────────────┐\n";
+        printf(" │ %-15s: %-42s │\n", "Date", $metadata->{timestamp});
+        printf(" │ %-15s: %-42s │\n", "Target Path", $metadata->{target_path});
+        printf(" │ %-15s: %-42s │\n", "Language", uc($metadata->{language}));
+        printf(" │ %-15s: %-42s │\n", "Files Scanned", $metadata->{files_scanned});
+        print " └──────────────────────────────────────────────────────────────┘\n\n";
+        print color('reset');
     }
     
     my %color_map = (
-        HIGH   => 'bold red',
-        MEDIUM => 'bold yellow',
-        LOW    => 'bold green',
+        HIGH   => 'bold bright_red',
+        MEDIUM => 'bold bright_yellow',
+        LOW    => 'bold bright_green',
     );
     
     if (!@$vulnerabilities) {
-        print color('bold green'), " [V] No vulnerabilities found! Code looks clean.\n\n", color('reset');
+        print color('bold bright_green'), " [✓] PERFECT. No vulnerabilities found! Code looks clean.\n\n", color('reset');
     }
     
     foreach my $vuln (@$vulnerabilities) {
         my $sev = uc($vuln->{severity});
         my $cat_color = $color_map{$sev} || 'reset';
         
-        print color($cat_color), " [$sev] ", color('reset');
+        print color($cat_color), " ⬤ [$sev] ", color('reset');
         print color('bold white'), "$vuln->{file}:$vuln->{line}", color('reset');
         print color('bright_black'), " (Rule: $vuln->{rule_id})\n", color('reset');
-        print "  | Message : $vuln->{message}\n";
-        print "  | Snippet : ", color('bright_white'), "$vuln->{snippet}\n", color('reset');
-        print "  | Fix     : ", color('bright_green'), "$vuln->{fix}\n", color('reset');
-        print "-" x 60, "\n";
+        print "    ├─ Message : $vuln->{message}\n";
+        print "    ├─ Snippet : ", color('bright_red'), "$vuln->{snippet}\n", color('reset');
+        print "    └─ Fix     : ", color('bright_green'), "$vuln->{fix}\n", color('reset');
+        print "\n";
     }
     
-    print "\n", color('bold cyan'), "=== Risk Summary ===", color('reset'), "\n";
+    print "\n", color('bold cyan'), " ╭── Risk Summary ──────────────────────────╮", color('reset'), "\n";
     
-    my $cat_color = $score_data->{category} eq 'CRITICAL' ? 'bold red' :
-                    $score_data->{category} eq 'MODERATE' ? 'bold yellow' : 'bold green';
+    my $cat_color = $score_data->{category} eq 'CRITICAL' ? 'bold bright_red' :
+                    $score_data->{category} eq 'MODERATE' ? 'bold bright_yellow' : 'bold bright_green';
                     
-    print " Total Risk Score : $score_data->{score}\n";
-    print " Risk Category    : ", color($cat_color), $score_data->{category}, color('reset'), "\n\n";
+    printf(" │  Total Risk Score : %-20s │\n", $score_data->{score});
+    print  " │  Risk Category    : ";
+    print color($cat_color), sprintf("%-20s", $score_data->{category}), color('reset'), " │\n";
+    print color('bold cyan'), " ╰──────────────────────────────────────────╯", color('reset'), "\n\n";
 }
 
 sub generate_json {
@@ -69,7 +79,7 @@ sub generate_json {
     print $fh $json;
     close $fh;
     
-    print color('bright_black'), " JSON report generated: $output_file\n", color('reset');
+    print color('bright_black'), " [✓] JSON report generated: $output_file\n", color('reset');
 }
 
 sub generate_html {
@@ -302,8 +312,6 @@ HTML
     open my $fh, '>', $output_file or die "Could not open $output_file for writing: $!\n";
     print $fh $html;
     close $fh;
-    
-    print color('bright_black'), " HTML report generated:  $output_file\n", color('reset');
 }
 
 sub _escape_html {
