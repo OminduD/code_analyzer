@@ -30,17 +30,29 @@ sub analyze {
         my $line_num = $token->{line_num};
         
         foreach my $rule (@$rules) {
-            my $pattern = $rule->{pattern};
-            if ($content =~ /$pattern/) {
-                push @vulnerabilities, {
-                    file     => $file,
-                    line     => $line_num,
-                    rule_id  => $rule->{id},
-                    message  => $rule->{message},
-                    severity => $rule->{severity},
-                    fix      => $rule->{fix},
-                    snippet  => $content,
-                };
+            # Advanced rules using custom matching logic
+            if ($rule->{match_func}) {
+                # Execute the custom match subroutine.
+                # The rule itself can track state across multiple calls.
+                my $vuln = $rule->{match_func}->($file, $token, \@vulnerabilities);
+                if ($vuln) {
+                    push @vulnerabilities, $vuln;
+                }
+            } 
+            # Standard regex pattern rules
+            elsif ($rule->{pattern}) {
+                my $pattern = $rule->{pattern};
+                if ($content =~ /$pattern/) {
+                    push @vulnerabilities, {
+                        file     => $file,
+                        line     => $line_num,
+                        rule_id  => $rule->{id},
+                        message  => $rule->{message},
+                        severity => $rule->{severity},
+                        fix      => $rule->{fix},
+                        snippet  => $content,
+                    };
+                }
             }
         }
     }
