@@ -31,7 +31,7 @@ GetOptions(
 ) or die "Error parsing command line arguments\n";
 
 if (!$path || !$lang) {
-    die "Usage: $0 --path <dir> --lang <c|cpp|php|python|js|java|rust|go|lua|asm|ada|cobol|pascal> [--json report.json] [--html report.html] [--severity <LOW|MEDIUM|HIGH>] [--serve]\n";
+    die "Usage: $0 --path <dir> --lang <c|cpp|php|python|js|java|rust|go|lua|asm|ada|cobol|pascal|ruby|csharp|r|swift|kotlin|typescript|scala|perl|bash|haskell> [--json report.json] [--html report.html] [--severity <LOW|MEDIUM|HIGH>] [--serve]\n";
 }
 
 # Determine rules directory
