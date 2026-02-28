@@ -31,7 +31,7 @@ GetOptions(
 ) or die "Error parsing command line arguments\n";
 
 if (!$path || !$lang) {
-    die "Usage: $0 --path <dir> --lang <c|cpp|php|python|js|java|rust|go|lua|asm|ada|cobol|pascal|ruby|csharp|r|swift|kotlin|typescript|scala|perl|bash|haskell> [--json report.json] [--html report.html] [--severity <LOW|MEDIUM|HIGH>] [--serve]\n";
+    die "Usage: $0 --path <dir> --lang <all|c|cpp|php|python|js|java|rust|go|lua|asm|ada|cobol|pascal|ruby|csharp|r|swift|kotlin|typescript|scala|perl|bash|haskell> [--json report.json] [--html report.html] [--severity <LOW|MEDIUM|HIGH>] [--serve]\n";
 }
 
 # Determine rules directory
@@ -47,21 +47,28 @@ if (!@$files) {
 
 print "Found " . scalar(@$files) . " file(s) to scan.\n";
 
-# 2. Load rules
-my $rules;
-eval {
-    $rules = RuleEngine::load_rules($rules_dir, $lang);
-};
-if ($@) {
-    die "Error loading rules: $@\n";
-}
-
-# 3. Analyze each file
+# 2. Analyze each file
 my @all_vulnerabilities;
+my %loaded_rules;
 
-foreach my $file (@$files) {
-    # Tokenize file (reads lines, strips comments)
-    my $tokens = Tokenizer::tokenize_file($file, $lang);
+foreach my $file_meta (@$files) {
+    my $file = $file_meta->{path};
+    my $file_lang = $file_meta->{lang};
+
+    # Lazy-load rules for this language
+    if (!exists $loaded_rules{$file_lang}) {
+        eval {
+            $loaded_rules{$file_lang} = RuleEngine::load_rules($rules_dir, $file_lang);
+        };
+        if ($@) {
+            die "Error loading rules for $file_lang: $@\n";
+        }
+    }
+
+    my $rules = $loaded_rules{$file_lang};
+
+    # Tokenize file
+    my $tokens = Tokenizer::tokenize_file($file, $file_lang);
     
     # Analyze tokens
     my $vulns = RuleEngine::analyze($file, $tokens, $rules);
