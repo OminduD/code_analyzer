@@ -19,7 +19,7 @@ sub tokenize_file {
         my $line_num = $i + 1;
         
         # 1. C-Style (/* */ and //)
-        if ($lang =~ /^(c|php|js|java|rust|go|cpp)$/) {
+        if ($lang =~ /^(c|php|js|java|rust|go|cpp|csharp|swift|kotlin|typescript|scala)$/) {
             if ($in_block_comment) {
                 if ($line =~ s/^.*?\*\///) { $in_block_comment = 0; } else { $line = ''; }
             }
@@ -42,7 +42,16 @@ sub tokenize_file {
             if (!$in_block_comment && $line =~ s/("""|''').*//) { $in_block_comment = 1; }
             if (!$in_block_comment) { $line =~ s/#.*//; }
 
-        # 3. Lua-Style (--[[ ]] and --)
+        # 3. Hash-Style (Ruby, R, Perl, Bash)
+        } elsif ($lang =~ /^(ruby|r|perl|bash)$/) {
+            if ($lang eq 'ruby' && $line =~ /^=begin/) { $in_block_comment = 1; $line = ''; }
+            if ($lang eq 'ruby' && $in_block_comment && $line =~ /^=end/) { $in_block_comment = 0; $line = ''; }
+            if ($lang eq 'perl' && $line =~ /^=pod/) { $in_block_comment = 1; $line = ''; }
+            if ($lang eq 'perl' && $in_block_comment && $line =~ /^=cut/) { $in_block_comment = 0; $line = ''; }
+            
+            if (!$in_block_comment) { $line =~ s/#.*//; }
+
+        # 4. Lua-Style (--[[ ]] and --)
         } elsif ($lang eq 'lua') {
             if ($in_block_comment) {
                 if ($line =~ s/^.*?\]\]//) { $in_block_comment = 0; } else { $line = ''; }
@@ -81,7 +90,17 @@ sub tokenize_file {
             if (!$in_block_comment && $line =~ s/\(\*.*//) { $in_block_comment = 'paren'; }
             if (!$in_block_comment && $line =~ s/\{.*//) { $in_block_comment = 'brace'; }
             
+            
             if (!$in_block_comment) { $line =~ s/\/\/.*//; }
+        
+        # 8. Haskell style ({- -} and --)
+        } elsif ($lang eq 'haskell') {
+            if ($in_block_comment) {
+                if ($line =~ s/^.*?-}//) { $in_block_comment = 0; } else { $line = ''; }
+            }
+            if (!$in_block_comment && $line =~ s/\{-.*?-}//g) { }
+            if (!$in_block_comment && $line =~ s/\{-.*//) { $in_block_comment = 1; }
+            if (!$in_block_comment) { $line =~ s/--.*//; }
         }
         
         # Normalize whitespace
