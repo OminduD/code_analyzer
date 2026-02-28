@@ -4,8 +4,6 @@ use strict;
 use warnings;
 use Getopt::Long;
 use File::Spec;
-use File::Basename;
-use Cwd qw(abs_path);
 use FindBin;
 use lib "$FindBin::Bin/../lib";
 
@@ -98,27 +96,6 @@ if ($json_out) {
 
 if ($html_out) {
     Reporter::generate_html(\@all_vulnerabilities, $score_data, \%metadata, $html_out);
-    
-    # Auto-serve the HTML report
-    my $abs_html = abs_path($html_out);
-    if ($abs_html && -f $abs_html) {
-        my $report_dir  = dirname($abs_html);
-        my $report_name = basename($abs_html);
-        my $port = 8000;
-        
-        print "\n\033[1;36m[i] Starting local web server to display HTML report...\033[0m\n";
-        print "\033[92m[✓] Report hosted at: http://localhost:$port/$report_name\033[0m\n\n";
-        
-        # Open browser natively across Linux/Mac
-        if ($^O eq 'linux') {
-            system("xdg-open 'http://localhost:$port/$report_name' >/dev/null 2>&1 &");
-        } elsif ($^O eq 'darwin') {
-            system("open 'http://localhost:$port/$report_name' >/dev/null 2>&1 &");
-        }
-        
-        # Spawn the python server synchronously so the process stays alive
-        system("python3 -m http.server $port --directory '$report_dir'");
-    }
 }
 
 exit 0;
