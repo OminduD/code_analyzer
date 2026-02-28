@@ -28,7 +28,7 @@ GetOptions(
 ) or die "Error parsing command line arguments\n";
 
 if (!$path || !$lang) {
-    die "Usage: $0 --path <dir> --lang <c|php|python> [--json report.json] [--html report.html] [--severity <LOW|MEDIUM|HIGH>]\n";
+    die "Usage: $0 --path <dir> --lang <c|php|python|js|java> [--json report.json] [--html report.html] [--severity <LOW|MEDIUM|HIGH>]\n";
 }
 
 # Determine rules directory
@@ -76,18 +76,26 @@ if ($severity_filter) {
     }
 }
 
+# Add Metadata payload
+my %metadata = (
+    timestamp     => scalar(localtime),
+    files_scanned => scalar(@$files),
+    target_path   => $path,
+    language      => $lang,
+);
+
 # 4. Calculate score
 my $score_data = Scorer::calculate_score(\@all_vulnerabilities);
 
 # 5. Output reports
-Reporter::print_terminal(\@all_vulnerabilities, $score_data);
+Reporter::print_terminal(\@all_vulnerabilities, $score_data, \%metadata);
 
 if ($json_out) {
-    Reporter::generate_json(\@all_vulnerabilities, $score_data, $json_out);
+    Reporter::generate_json(\@all_vulnerabilities, $score_data, \%metadata, $json_out);
 }
 
 if ($html_out) {
-    Reporter::generate_html(\@all_vulnerabilities, $score_data, $html_out);
+    Reporter::generate_html(\@all_vulnerabilities, $score_data, \%metadata, $html_out);
 }
 
 exit 0;
