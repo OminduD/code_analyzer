@@ -47,9 +47,21 @@ if (!@$files) {
 
 print "Found " . scalar(@$files) . " file(s) to scan.\n";
 
-# 2. Analyze each file
+# 2. Load Universal Rules (Secrets)
+my $secrets_file = File::Spec->catfile($rules_dir, "secrets_rules.pl");
+my $universal_rules = [];
+if (-f $secrets_file) {
+    $universal_rules = do $secrets_file;
+    if ($@) {
+        warn "Warning: Could not load universal secrets rules: $@\n";
+    }
+}
+
+# 3. Analyze each file
 my @all_vulnerabilities;
 my %loaded_rules;
+my $total_loc = 0;
+my $start_time = time();
 
 foreach my $file_meta (@$files) {
     my $file = $file_meta->{path};
@@ -65,16 +77,22 @@ foreach my $file_meta (@$files) {
         }
     }
 
-    my $rules = $loaded_rules{$file_lang};
+    my @combined_rules = (@{$loaded_rules{$file_lang}}, @$universal_rules);
 
     # Tokenize file
     my $tokens = Tokenizer::tokenize_file($file, $file_lang);
+    $total_loc += scalar(@$tokens);
     
     # Analyze tokens
-    my $vulns = RuleEngine::analyze($file, $tokens, $rules);
+    my $vulns = RuleEngine::analyze($file, $tokens, \@combined_rules);
     
     push @all_vulnerabilities, @$vulns;
 }
+
+my $end_time = time();
+my $duration = $end_time - $start_time;
+$duration = 1 if $duration == 0; # Prevent 0s duration display
+
 
 # Apply severity filter if specified
 if ($severity_filter) {
@@ -92,6 +110,8 @@ my %metadata = (
     files_scanned => scalar(@$files),
     target_path   => $path,
     language      => $lang,
+    total_loc     => $total_loc,
+    duration_secs => $duration,
 );
 
 # 4. Calculate score
