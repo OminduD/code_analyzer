@@ -10,7 +10,11 @@ sub load_rules {
     
     my $rule_file = File::Spec->catfile($rules_dir, "${lang}_rules.pl");
     
-    die "Rule file not found: $rule_file\n" unless -f $rule_file;
+    if (!-f $rule_file) {
+        # Return empty ruleset instead of dying, useful for 'all' mode where 
+        # a file extension might be recognized but no rules defined yet.
+        return [];
+    }
     
     my $rules = do $rule_file;
     die "Could not load rules from $rule_file: $@\n" if $@;
