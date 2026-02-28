@@ -14,6 +14,14 @@ sub scan_directory {
         'python' => qr/\.py$/,
         'js'     => qr/\.js$/,
         'java'   => qr/\.java$/,
+        'rust'   => qr/\.rs$/,
+        'lua'    => qr/\.lua$/,
+        'go'     => qr/\.go$/,
+        'cpp'    => qr/\.(?:cpp|cxx|cc|hpp|h)$/,
+        'asm'    => qr/\.(?:asm|s)$/,
+        'ada'    => qr/\.(?:adb|ads)$/,
+        'cobol'  => qr/\.(?:cbl|cob|cpy)$/,
+        'pascal' => qr/\.(?:pas|inc)$/,
     );
     
     my $ext_regex = $extensions{lc($lang)};
