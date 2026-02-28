@@ -18,52 +18,70 @@ sub tokenize_file {
         my $line = $lines[$i];
         my $line_num = $i + 1;
         
-        # Strip comments based on language
-        if ($lang eq 'c' || $lang eq 'php' || $lang eq 'js' || $lang eq 'java') {
-            # Strip block comments
+        # 1. C-Style (/* */ and //)
+        if ($lang =~ /^(c|php|js|java|rust|go|cpp)$/) {
             if ($in_block_comment) {
-                if ($line =~ s/^.*?\*\///) {
-                    $in_block_comment = 0;
-                } else {
-                    $line = '';
-                }
+                if ($line =~ s/^.*?\*\///) { $in_block_comment = 0; } else { $line = ''; }
             }
-            if (!$in_block_comment && $line =~ s/\/\*.*?\*\///g) {
-                # removed inline block comment
-            }
-            if (!$in_block_comment && $line =~ s/\/\*.*//) {
-                $in_block_comment = 1;
-            }
-            
-            # Strip line comments
+            if (!$in_block_comment && $line =~ s/\/\*.*?\*\///g) { }
+            if (!$in_block_comment && $line =~ s/\/\*.*//) { $in_block_comment = 1; }
             if (!$in_block_comment) {
-                if ($lang eq 'c') {
+                if ($lang eq 'php') {
+                    $line =~ s/(?:\/\/|#).*//; # PHP has both
+                } else {
                     $line =~ s/\/\/.*//;
-                } else {
-                    $line =~ s/(?:\/\/|#).*//; # PHP covers // and #
                 }
             }
-            
+        
+        # 2. Python-Style ('''/""" and #)
         } elsif ($lang eq 'python') {
-            # Python block comments (triple quotes) - this is a bit simplistic, but covers basic cases
             if ($in_block_comment) {
-                if ($line =~ s/^.*?("""|''')//) {
-                    $in_block_comment = 0;
-                } else {
-                    $line = '';
-                }
+                if ($line =~ s/^.*?("""|''')//) { $in_block_comment = 0; } else { $line = ''; }
             }
-            if (!$in_block_comment && $line =~ s/("""|''').*?\1//g) {
-                # removed inline triple quotes
+            if (!$in_block_comment && $line =~ s/("""|''').*?\1//g) { }
+            if (!$in_block_comment && $line =~ s/("""|''').*//) { $in_block_comment = 1; }
+            if (!$in_block_comment) { $line =~ s/#.*//; }
+
+        # 3. Lua-Style (--[[ ]] and --)
+        } elsif ($lang eq 'lua') {
+            if ($in_block_comment) {
+                if ($line =~ s/^.*?\]\]//) { $in_block_comment = 0; } else { $line = ''; }
             }
-            if (!$in_block_comment && $line =~ s/("""|''').*//) {
-                $in_block_comment = 1;
-            }
+            if (!$in_block_comment && $line =~ s/--\[\[.*?\]\]//g) { }
+            if (!$in_block_comment && $line =~ s/--\[\[.*//) { $in_block_comment = 1; }
+            if (!$in_block_comment) { $line =~ s/--.*//; }
+        
+        # 4. Assembly & Single Hash styles (# or ;)
+        } elsif ($lang eq 'asm') {
+            $line =~ s/[#;].*//;
+
+        # 5. Ada & Single Dash styles (--)
+        } elsif ($lang eq 'ada') {
+            $line =~ s/--.*//;
             
-            # Strip line comments
-            if (!$in_block_comment) {
-                $line =~ s/#.*//;
+        # 6. COBOL styles (* in Col 7 or *>)
+        } elsif ($lang eq 'cobol') {
+            # Strip lines starting with * at column 7
+            if (length($line) > 6 && substr($line, 6, 1) eq '*') {
+                $line = '';
+            } else {
+                $line =~ s/\*>.*//; # inline floating comments
             }
+        
+        # 7. Pascal styles ((* *), { } and //)
+        } elsif ($lang eq 'pascal') {
+            if ($in_block_comment eq 'paren') {
+                if ($line =~ s/^.*?\*\)//) { $in_block_comment = 0; } else { $line = ''; }
+            } elsif ($in_block_comment eq 'brace') {
+                if ($line =~ s/^.*\}//) { $in_block_comment = 0; } else { $line = ''; }
+            }
+            if (!$in_block_comment && $line =~ s/\(\*.*?\*\)//g) { }
+            if (!$in_block_comment && $line =~ s/\{.*?\}//g) { }
+            
+            if (!$in_block_comment && $line =~ s/\(\*.*//) { $in_block_comment = 'paren'; }
+            if (!$in_block_comment && $line =~ s/\{.*//) { $in_block_comment = 'brace'; }
+            
+            if (!$in_block_comment) { $line =~ s/\/\/.*//; }
         }
         
         # Normalize whitespace
