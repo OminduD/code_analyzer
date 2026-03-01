@@ -2,6 +2,7 @@ package Scorer;
 
 use strict;
 use warnings;
+use Carp;
 
 my %SEVERITY_WEIGHT = (
     HIGH   => 10,
@@ -11,6 +12,7 @@ my %SEVERITY_WEIGHT = (
 
 sub calculate_score {
     my ($vulnerabilities) = @_;
+    croak "Expected vulnerabilities array reference" unless ref($vulnerabilities) eq 'ARRAY';
     
     my $total_score = 0;
     
