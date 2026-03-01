@@ -113,6 +113,27 @@
         }
     },
     {
+        id       => "PY009",
+        pattern  => qr/\b(?:winreg|_winreg)\.(?:OpenKey|QueryValue|QueryValueEx|QueryInfoKey)\s*\(/,
+        message  => "Potential Windows Registry access. Ensure access is intended and does not lead to information disclosure.",
+        severity => "MEDIUM",
+        fix      => "Review registry access to ensure safe and authorized keys are read.",
+    },
+    {
+        id       => "PY010",
+        pattern  => qr/\b(?:winreg|_winreg)\.(?:CreateKey|CreateKeyEx|SetValue|SetValueEx|DeleteKey|DeleteKeyEx|DeleteValue)\s*\(/,
+        message  => "Potential Windows Registry modification. Ensure modification is intended and not creating unwanted keys or malware persistence.",
+        severity => "HIGH",
+        fix      => "Avoid modifying the registry unless strictly necessary, and validate all keys and values.",
+    },
+    {
+        id       => "PY011",
+        pattern  => qr/\bsocket\.socket\s*\(\s*(?:socket\.)?(?:AF_INET|AF_INET6|AF_PACKET)\s*,\s*(?:socket\.)?SOCK_RAW(?:.*)|\bpyshark\.LiveCapture\s*\(|\bscapy\.(?:send|sniff)\s*\(/,
+        message  => "Potential covert network communication or packet sniffing detected. Use of raw sockets, pyshark, or scapy indicates low-level network access.",
+        severity => "HIGH",
+        fix      => "Review network access requirements and ensure they are explicitly needed for the application's functionality.",
+    },
+    {
         id       => "PY999",
         pattern  => qr/(?i)(Software(?:\\|\/)Microsoft(?:\\|\/)Windows(?:\\|\/)CurrentVersion(?:\\|\/)Run|\.config(?:\\|\/)autostart)/,
         message  => "Potential malware persistence mechanism detected (Windows Run key or Linux autostart)",
