@@ -17,8 +17,18 @@ sub load_rules {
     }
     
     my $rules = do $rule_file;
-    die "Could not load rules from $rule_file: $@\n" if $@;
-    die "Rules must be an array reference in $rule_file\n" unless ref($rules) eq 'ARRAY';
+    if ($@) {
+        warn "Error compiling rules from $rule_file: $@\n";
+        return [];
+    } elsif (!defined $rules) {
+        warn "Error reading rules from $rule_file: $!\n";
+        return [];
+    }
+    
+    if (ref($rules) ne 'ARRAY') {
+        warn "Rules must be an array reference in $rule_file\n";
+        return [];
+    }
     
     return $rules;
 }
@@ -38,24 +48,36 @@ sub analyze {
             if ($rule->{match_func}) {
                 # Execute the custom match subroutine.
                 # The rule itself can track state across multiple calls.
-                my $vuln = $rule->{match_func}->($file, $token, \@vulnerabilities);
-                if ($vuln) {
-                    push @vulnerabilities, $vuln;
+                eval {
+                    my $vuln = $rule->{match_func}->($file, $token, \@vulnerabilities);
+                    if ($vuln) {
+                        push @vulnerabilities, $vuln;
+                    }
+                };
+                if ($@) {
+                    my $rule_id = $rule->{id} || "UNKNOWN";
+                    warn "Error processing rule $rule_id on file $file: $@\n";
                 }
             } 
             # Standard regex pattern rules
             elsif ($rule->{pattern}) {
                 my $pattern = $rule->{pattern};
-                if ($content =~ /$pattern/) {
-                    push @vulnerabilities, {
-                        file     => $file,
-                        line     => $line_num,
-                        rule_id  => $rule->{id},
-                        message  => $rule->{message},
-                        severity => $rule->{severity},
-                        fix      => $rule->{fix},
-                        snippet  => $content,
-                    };
+                eval {
+                    if ($content =~ /$pattern/) {
+                        push @vulnerabilities, {
+                            file     => $file,
+                            line     => $line_num,
+                            rule_id  => $rule->{id},
+                            message  => $rule->{message},
+                            severity => $rule->{severity},
+                            fix      => $rule->{fix},
+                            snippet  => $content,
+                        };
+                    }
+                };
+                if ($@) {
+                    my $rule_id = $rule->{id} || "UNKNOWN";
+                    warn "Error processing regex rule $rule_id on file $file: $@\n";
                 }
             }
         }
