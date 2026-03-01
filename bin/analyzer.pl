@@ -51,9 +51,15 @@ print "Found " . scalar(@$files) . " file(s) to scan.\n";
 my $secrets_file = File::Spec->catfile($rules_dir, "secrets_rules.pl");
 my $universal_rules = [];
 if (-f $secrets_file) {
-    $universal_rules = do $secrets_file;
+    my $loaded = do $secrets_file;
     if ($@) {
-        warn "Warning: Could not load universal secrets rules: $@\n";
+        warn "Warning: Could not compile universal secrets rules: $@\n";
+    } elsif (!defined $loaded) {
+        warn "Warning: Could not read universal secrets rules: $!\n";
+    } elsif (ref($loaded) eq 'ARRAY') {
+        $universal_rules = $loaded;
+    } else {
+        warn "Warning: Universal rules must be an array reference.\n";
     }
 }
 
@@ -73,7 +79,8 @@ foreach my $file_meta (@$files) {
             $loaded_rules{$file_lang} = RuleEngine::load_rules($rules_dir, $file_lang);
         };
         if ($@) {
-            die "Error loading rules for $file_lang: $@\n";
+            warn "Warning: Error loading rules for $file_lang: $@\n";
+            $loaded_rules{$file_lang} = [];
         }
     }
 
