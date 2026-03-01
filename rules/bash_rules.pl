@@ -55,4 +55,19 @@
         severity => "CRITICAL",
         fix      => "Do not dynamically generate and write executable scripts. Use configuration or data files instead.",
     },
+    ,
+    {
+        id       => "BASH008",
+        pattern  => qr/(?:for|while|until)\b.*?(?:\n.*?){0,8}(?:\&\s*$|\|\s*&)/ms,
+        message  => "Background process creation bomb: a command is launched as a background job (&) inside a loop with no apparent limit. This spawns unbounded background processes that exhaust system resources.",
+        severity => "HIGH",
+        fix      => "Never launch background processes in an unbounded loop. Use 'wait', 'xargs -P', or GNU parallel with a bounded worker count instead.",
+    },
+    {
+        id       => "BASH009",
+        pattern  => qr/:\s*\(\s*\)\s*\{\s*:\s*[|&]+\s*:&?\s*\}|(?:bash|sh)\s+-c\s+['"]\s*.*?\s*[&|]+\s*.*?['"]\s*&/,
+        message  => "Fork bomb or recursive process spawner detected in Bash. Subshell spawning inside a function that calls itself (fork bomb pattern) will exhaust all available process slots instantly.",
+        severity => "CRITICAL",
+        fix      => "Remove fork bombs and self-referential process spawning. Set 'ulimit -u <N>' in system profile to limit max user processes.",
+    }
 ]
