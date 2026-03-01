@@ -182,4 +182,31 @@
         severity => "HIGH",
         fix      => "Review clipboard access. Clipboard monitoring and modification should never occur silently in the background.",
     },
+
+    # PY019 - Fork Bomb via os.fork() in loop or recursive call
+    {
+        id       => "PY019",
+        pattern  => qr/\bos\.fork\s*\(\s*\)/,
+        message  => "os.fork() detected. When called inside a loop or recursive function without strict limits this creates a fork bomb, spawning processes exponentially until the system runs out of PIDs and crashes.",
+        severity => "HIGH",
+        fix      => "Avoid os.fork() in loops or recursive functions. Use multiprocessing.Pool with a bounded max_workers count instead.",
+    },
+
+    # PY020 - Process Creation Bomb (subprocess/multiprocessing in loop)
+    {
+        id       => "PY020",
+        pattern  => qr/(?:for|while)\b.*?(?:\n.*?){0,8}\b(?:subprocess\.Popen|subprocess\.run|subprocess\.call|multiprocessing\.Process\s*\(|os\.system\s*\(|os\.popen\s*\()\s*\(/s,
+        message  => "Potential process creation bomb: subprocess or multiprocessing spawn inside a loop with no apparent bound. This can rapidly exhaust system resources (RAM, PIDs, open file descriptors).",
+        severity => "HIGH",
+        fix      => "Always use bounded process pools (multiprocessing.Pool, concurrent.futures.ProcessPoolExecutor) with an explicit worker limit. Never spawn unbounded subprocesses in a loop.",
+    },
+
+    # PY021 - Detached / Hidden Process (daemon/setsid hiding)
+    {
+        id       => "PY021",
+        pattern  => qr/\b(?:os\.setsid\s*\(\s*\)|os\.setpgrp\s*\(\s*\)|subprocess\.Popen.*?start_new_session\s*=\s*True|daemon\s*=\s*True.*?Process\s*\()/,
+        message  => "Hidden or detached process creation detected (os.setsid, start_new_session=True, daemon process). Malware uses these techniques to detach from the terminal and run invisibly in the background.",
+        severity => "HIGH",
+        fix      => "Avoid launching detached processes without explicit user consent. Use documented system services for background tasks.",
+    },
 ]
