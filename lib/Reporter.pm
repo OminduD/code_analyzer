@@ -5,6 +5,7 @@ use warnings;
 use Term::ANSIColor;
 use JSON::PP;
 use File::Basename;
+use Carp;
 
 sub print_terminal {
     my ($vulnerabilities, $score_data, $metadata) = @_;
@@ -77,7 +78,7 @@ sub generate_json {
     
     my $fh;
     unless (open $fh, '>', $output_file) {
-        warn "Error: Could not open JSON file '$output_file' for writing: $!\n";
+        carp "Error: Could not open JSON file '$output_file' for writing: $!\n";
         return;
     }
     print $fh $json;
@@ -511,7 +512,7 @@ HTML
 
     my $fh;
     unless (open $fh, '>', $output_file) {
-        warn "Error: Could not open HTML report file '$output_file' for writing: $!\n";
+        carp "Error: Could not open HTML report file '$output_file' for writing: $!\n";
         return;
     }
     print $fh $html;
