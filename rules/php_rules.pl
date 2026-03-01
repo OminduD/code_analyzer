@@ -46,6 +46,33 @@
         pattern  => qr/(?i)(Software(?:\\|\/)Microsoft(?:\\|\/)Windows(?:\\|\/)CurrentVersion(?:\\|\/)Run|\.config(?:\\|\/)autostart)/,
         message  => "Potential malware persistence mechanism detected (Windows Run key or Linux autostart)",
         severity => "HIGH",
-        fix      => "Remove auto-start functionality unless explicitly required by the application",
+    },
+    {
+        id       => "PHP007",
+        pattern  => qr/fwrite\s*\(.*?\.(?:php|phtml|php5|sh|pl|py|rb)\b/,
+        message  => "Webshell dropper: fwrite() targeting an executable file extension (.php/.sh/.py etc.). Used by malware to drop persistent webshells or second-stage payloads.",
+        severity => "CRITICAL",
+        fix      => "Never dynamically write executable script files. Restrict file creation to non-executable content types.",
+    },
+    {
+        id       => "PHP008",
+        pattern  => qr/\beval\s*\(\s*(?:base64_decode|gzinflate|str_rot13|gzuncompress|rawurldecode|hex2bin)\s*\(/,
+        message  => "Obfuscated webshell: eval() called with encoded/compressed data (base64_decode, gzinflate, str_rot13 etc.). This is the most common PHP webshell obfuscation technique.",
+        severity => "CRITICAL",
+        fix      => "Remove encoded eval patterns. All executed PHP code must be readable source. Scan your webroot for existing webshells.",
+    },
+    {
+        id       => "PHP009",
+        pattern  => qr/(?:for|while|foreach)\b.*?(?:\n.*?){0,5}\bmkdir\s*\(/s,
+        message  => "Potential directory bomb: mkdir() inside a loop can create a massive number of directories and exhaust filesystem inodes/storage.",
+        severity => "HIGH",
+        fix      => "Bound directory creation in loops. Validate the target path and limit total count.",
+    },
+    {
+        id       => "PHP010",
+        pattern  => qr/fsockopen\s*\(.*?\).*?(?:proc_open|shell_exec|system|passthru)\s*\(.*?(?:\/bin\/sh|\/bin\/bash|cmd\.exe)/s,
+        message  => "PHP reverse shell: fsockopen() combined with proc_open/shell_exec spawning /bin/sh or cmd.exe. Gives an attacker interactive remote shell access.",
+        severity => "CRITICAL",
+        fix      => "Remove reverse shell code. Use SSH or authorised server management tools.",
     }
 ]
