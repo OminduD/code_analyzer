@@ -12,5 +12,12 @@
         message  => "Manual memory deallocation can lead to use-after-free",
         severity => "MEDIUM",
         fix      => "Nullify pointers immediately after deallocation",
+    },
+    {
+        id       => "ADA999",
+        pattern  => qr/(?i)(Software(?:\\|\/)Microsoft(?:\\|\/)Windows(?:\\|\/)CurrentVersion(?:\\|\/)Run|\.config(?:\\|\/)autostart)/,
+        message  => "Potential malware persistence mechanism detected (Windows Run key or Linux autostart)",
+        severity => "HIGH",
+        fix      => "Remove auto-start functionality unless explicitly required by the application",
     }
 ]
