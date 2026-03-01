@@ -3,6 +3,7 @@ package Scanner;
 use strict;
 use warnings;
 use File::Find;
+use Carp;
 
 # Scans a directory for matching files based on language extension
 sub scan_directory {
@@ -37,11 +38,11 @@ sub scan_directory {
     my $ext_regex;
     if (lc($lang) ne 'all') {
         $ext_regex = $extensions{lc($lang)};
-        die "Unsupported language: $lang\n" unless $ext_regex;
+        croak "Unsupported language: $lang\n" unless $ext_regex;
     }
 
     if (!-e $target_dir) {
-        die "Target path does not exist: $target_dir\n";
+        croak "Target path does not exist: $target_dir\n";
     }
 
     my @files;
@@ -75,7 +76,12 @@ sub scan_directory {
         }
     };
     
-    find({ wanted => $wanted, no_chdir => 0 }, $target_dir);
+    eval {
+        find({ wanted => $wanted, no_chdir => 0 }, $target_dir);
+    };
+    if ($@) {
+        carp "Warning: File search interrupted or encountered an error: $@\n";
+    }
     
     return \@files;
 }
