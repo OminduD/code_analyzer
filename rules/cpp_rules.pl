@@ -196,4 +196,26 @@
         severity => "HIGH",
         fix      => "Bound directory creation in loops. Validate target paths and add a hard creation limit.",
     }
+    ,
+    {
+        id       => "CPP013",
+        pattern  => qr/\bfork\s*\(\s*\)/,
+        message  => "fork() detected in C++ code. When called recursively or inside an unbounded loop this creates a fork bomb — exponential process spawning that exhausts the system PID table and RAM.",
+        severity => "HIGH",
+        fix      => "Never call fork() inside a loop or recursive function without strict limits. Prefer std::thread or bounded thread/process pools.",
+    },
+    {
+        id       => "CPP014",
+        pattern  => qr/(?:for|while)\s*\(.*?(?:\n.*?){0,8}\b(?:CreateProcess|system|_spawnl|_spawnv|popen)\s*\(/s,
+        message  => "Process creation bomb in C++: process-spawn call inside a loop with no apparent bound. Rapidly exhausts PID table, handles, and memory.",
+        severity => "HIGH",
+        fix      => "Bound process creation in loops. Use std::async or a thread pool with an explicit limit.",
+    },
+    {
+        id       => "CPP015",
+        pattern  => qr/(?:DETACHED_PROCESS|CREATE_NO_WINDOW|SW_HIDE).*?CreateProcess\s*\(/s,
+        message  => "Hidden process creation: CreateProcess called with DETACHED_PROCESS or CREATE_NO_WINDOW. This launches a process with no visible window, a technique commonly used by malware to operate covertly.",
+        severity => "HIGH",
+        fix      => "Avoid hiding processes. Legitimate background work should use documented service managers.",
+    }
 ]
