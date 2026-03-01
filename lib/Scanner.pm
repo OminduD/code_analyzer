@@ -40,6 +40,10 @@ sub scan_directory {
         die "Unsupported language: $lang\n" unless $ext_regex;
     }
 
+    if (!-e $target_dir) {
+        die "Target path does not exist: $target_dir\n";
+    }
+
     my @files;
     
     my $wanted = sub {
