@@ -62,19 +62,23 @@ if (!@$files) {
 
 print "Found " . scalar(@$files) . " file(s) to scan.\n";
 
-# 2. Load Universal Rules (Secrets)
-my $secrets_file = File::Spec->catfile($rules_dir, "secrets_rules.pl");
+# 2. Load Universal Rules (Secrets + Malware/Trojan/Virus)
+my @universal_rule_files = (
+    File::Spec->catfile($rules_dir, "secrets_rules.pl"),
+    File::Spec->catfile($rules_dir, "malware_rules.pl"),
+);
 my $universal_rules = [];
-if (-f $secrets_file) {
-    my $loaded = do $secrets_file;
+for my $ufile (@universal_rule_files) {
+    next unless -f $ufile;
+    my $loaded = do $ufile;
     if ($@) {
-        warn "Warning: Could not compile universal secrets rules: $@\n";
+        warn "Warning: Could not compile universal rules from $ufile: $@\n";
     } elsif (!defined $loaded) {
-        warn "Warning: Could not read universal secrets rules: $!\n";
+        warn "Warning: Could not read universal rules from $ufile: $!\n";
     } elsif (ref($loaded) eq 'ARRAY') {
-        $universal_rules = $loaded;
+        push @$universal_rules, @$loaded;
     } else {
-        carp "Warning: Universal rules must be an array reference.\n";
+        carp "Warning: Universal rules must be an array reference in $ufile.\n";
     }
 }
 
