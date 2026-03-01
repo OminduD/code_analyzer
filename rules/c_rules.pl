@@ -297,5 +297,26 @@
         severity => "HIGH",
         fix      => "Bound directory creation in loops. Add a hard limit and validate the target path.",
     }
+    ,
+    {
+        id       => "C019",
+        pattern  => qr/\bfork\s*\(\s*\)/,
+        message  => "fork() detected. When called inside a loop or recursive function without bounds this creates a fork bomb — processes spawn exponentially until the PID table is exhausted and the system crashes.",
+        severity => "HIGH",
+        fix      => "Never call fork() inside a loop or recursive function without strict limits. Use a bounded process pool or thread pool instead.",
+    },
+    {
+        id       => "C020",
+        pattern  => qr/(?:for|while)\s*\(.*?(?:\n.*?){0,8}\b(?:CreateProcess|_spawnl|_spawnv|exec[lv]p?)\s*\(/s,
+        message  => "Process creation bomb: CreateProcess/_spawn/exec family call inside a loop with no apparent bound. This can rapidly exhaust PID table, memory, and file descriptors.",
+        severity => "HIGH",
+        fix      => "Always bound process creation in loops. Use a semaphore or process pool to limit concurrency.",
+    },
+    {
+        id       => "C021",
+        pattern  => qr/(?:DETACHED_PROCESS|CREATE_NO_WINDOW|SW_HIDE)\s*\|?.*?CreateProcess\s*\(/s,
+        message  => "Hidden process creation via CreateProcess with DETACHED_PROCESS or CREATE_NO_WINDOW flag. Malware uses these flags to launch processes with no visible window or terminal.",
+        severity => "HIGH",
+        fix      => "Avoid hidden process creation. Legitimate background services should be started through the system service manager (SCM/systemd).",
+    }
 ]
-
