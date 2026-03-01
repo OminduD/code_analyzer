@@ -3,6 +3,7 @@ package RuleEngine;
 use strict;
 use warnings;
 use File::Spec;
+use Carp;
 
 # Loads rules for a specific language
 sub load_rules {
@@ -18,15 +19,15 @@ sub load_rules {
     
     my $rules = do $rule_file;
     if ($@) {
-        warn "Error compiling rules from $rule_file: $@\n";
+        carp "Error compiling rules from $rule_file: $@\n";
         return [];
     } elsif (!defined $rules) {
-        warn "Error reading rules from $rule_file: $!\n";
+        carp "Error reading rules from $rule_file: $!\n";
         return [];
     }
     
     if (ref($rules) ne 'ARRAY') {
-        warn "Rules must be an array reference in $rule_file\n";
+        carp "Rules must be an array reference in $rule_file\n";
         return [];
     }
     
@@ -56,7 +57,7 @@ sub analyze {
                 };
                 if ($@) {
                     my $rule_id = $rule->{id} || "UNKNOWN";
-                    warn "Error processing rule $rule_id on file $file: $@\n";
+                    carp "Error processing rule $rule_id on file $file: $@\n";
                 }
             } 
             # Standard regex pattern rules
@@ -77,7 +78,7 @@ sub analyze {
                 };
                 if ($@) {
                     my $rule_id = $rule->{id} || "UNKNOWN";
-                    warn "Error processing regex rule $rule_id on file $file: $@\n";
+                    carp "Error processing regex rule $rule_id on file $file: $@\n";
                 }
             }
         }
