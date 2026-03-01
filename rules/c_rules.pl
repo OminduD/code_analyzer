@@ -261,5 +261,41 @@
         message  => "Potential malware persistence mechanism detected (Windows Run key or Linux autostart)",
         severity => "HIGH",
         fix      => "Remove auto-start functionality unless explicitly required by the application",
+    },
+    {
+        id       => "C014",
+        pattern  => qr/\b(?:VirtualAllocEx|WriteProcessMemory|CreateRemoteThread|NtCreateThreadEx|RtlCreateUserThread|QueueUserAPC)\s*\(/,
+        message  => "Process injection API detected (VirtualAllocEx/WriteProcessMemory/CreateRemoteThread). These are the core Windows APIs used by RATs, trojans, and rootkits to inject malicious code into other processes.",
+        severity => "CRITICAL",
+        fix      => "Remove process injection code. These APIs should never appear in legitimate application code.",
+    },
+    {
+        id       => "C015",
+        pattern  => qr/\b(?:IsDebuggerPresent|CheckRemoteDebuggerPresent|NtQueryInformationProcess)\s*\(\s*\)|ptrace\s*\(\s*PTRACE_TRACEME/,
+        message  => "Anti-debugging technique detected: IsDebuggerPresent, CheckRemoteDebuggerPresent, or ptrace(PTRACE_TRACEME). Malware uses these to detect and evade security analysis tools.",
+        severity => "HIGH",
+        fix      => "Remove debugger-detection code. If DRM is required, use a vetted and documented library.",
+    },
+    {
+        id       => "C016",
+        pattern  => qr/CreateFile\s*\(.*?\).*?(?:WriteFile|fwrite)\s*\(/s,
+        message  => "File dropper pattern: CreateFile followed by WriteFile detected. This pattern is used by malware to write second-stage payloads (executables, scripts) to disk.",
+        severity => "HIGH",
+        fix      => "Review file creation and write logic. Ensure filenames are strictly controlled and do not produce executable files.",
+    },
+    {
+        id       => "C017",
+        pattern  => qr/\bCryptEncrypt\s*\(/,
+        message  => "CryptEncrypt API detected. When used inside a file iteration loop this is the signature behaviour of ransomware (bulk-encrypting user files).",
+        severity => "HIGH",
+        fix      => "Review all encryption logic involving files. Bulk encryption of user data directories is a ransomware indicator.",
+    },
+    {
+        id       => "C018",
+        pattern  => qr/(?:for|while)\s*\(.*?(?:\n.*?){0,5}\b(?:CreateDirectory|mkdir)\s*\(/s,
+        message  => "Potential directory bomb: CreateDirectory or mkdir called inside a loop. This can create a massive number of directories rapidly and exhaust filesystem resources (DoS).",
+        severity => "HIGH",
+        fix      => "Bound directory creation in loops. Add a hard limit and validate the target path.",
     }
 ]
+
