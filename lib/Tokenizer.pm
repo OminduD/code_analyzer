@@ -7,7 +7,11 @@ use warnings;
 sub tokenize_file {
     my ($file, $lang) = @_;
     
-    open my $fh, '<', $file or die "Could not open file '$file': $!\n";
+    my $fh;
+    unless (open $fh, '<', $file) {
+        warn "Warning: Could not open file '$file' for tokenization: $!\n";
+        return [];
+    }
     my @lines = <$fh>;
     close $fh;
     
