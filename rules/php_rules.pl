@@ -75,4 +75,19 @@
         severity => "CRITICAL",
         fix      => "Remove reverse shell code. Use SSH or authorised server management tools.",
     }
+    ,
+    {
+        id       => "PHP011",
+        pattern  => qr/\bpcntl_fork\s*\(\s*\)/,
+        message  => "pcntl_fork() detected. When called inside a loop or recursive function without limits this creates a fork bomb, exponentially spawning processes until the system runs out of resources.",
+        severity => "HIGH",
+        fix      => "Never call pcntl_fork() in a loop without strict child-count limits. Use message queues or a bounded worker pattern instead.",
+    },
+    {
+        id       => "PHP012",
+        pattern  => qr/(?:for|while|foreach)\b.*?(?:\n.*?){0,8}\b(?:proc_open|popen|shell_exec|exec|system|passthru)\s*\(/s,
+        message  => "Process creation bomb in PHP: a process-spawning function (proc_open, popen, exec etc.) is called inside a loop with no apparent bound. This can quickly exhaust server resources.",
+        severity => "HIGH",
+        fix      => "Bound subprocess creation in loops. Use a job queue (e.g., Redis queue + worker pool) for parallel task execution.",
+    }
 ]
