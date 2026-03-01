@@ -235,6 +235,27 @@
         }
     },
     {
+        id       => "C011",
+        pattern  => qr/\b(?:RegOpenKey|RegOpenKeyEx|RegQueryValue|RegQueryValueEx)\s*\(/,
+        message  => "Potential Windows Registry access. Ensure access is intended and does not lead to information disclosure.",
+        severity => "MEDIUM",
+        fix      => "Review registry access to ensure safe and authorized keys are read.",
+    },
+    {
+        id       => "C012",
+        pattern  => qr/\b(?:RegCreateKey|RegCreateKeyEx|RegSetValue|RegSetValueEx|RegDeleteKey|RegDeleteKeyEx|RegDeleteValue)\s*\(/,
+        message  => "Potential Windows Registry modification. Ensure modification is intended and not creating unwanted keys or malware persistence.",
+        severity => "HIGH",
+        fix      => "Avoid modifying the registry unless strictly necessary, and validate all keys and values.",
+    },
+    {
+        id       => "C013",
+        pattern  => qr/\b(?:socket\s*\(\s*(?:AF_INET|AF_INET6|PF_INET|PF_INET6|AF_PACKET|PF_PACKET)\s*,\s*SOCK_RAW\s*,\s*|pcap_open_live\s*\(|pcap_create\s*\(|setsockopt\s*\(\s*[^,]+,\s*SOL_SOCKET\s*,\s*SO_BINDTODEVICE)/,
+        message  => "Potential covert network communication or packet sniffing detected. Use of raw sockets or pcap indicates low-level network access.",
+        severity => "HIGH",
+        fix      => "Review network access requirements and ensure they are explicitly needed for the application's functionality.",
+    },
+    {
         id       => "C999",
         pattern  => qr/(?i)(Software(?:\\|\/)Microsoft(?:\\|\/)Windows(?:\\|\/)CurrentVersion(?:\\|\/)Run|\.config(?:\\|\/)autostart)/,
         message  => "Potential malware persistence mechanism detected (Windows Run key or Linux autostart)",
