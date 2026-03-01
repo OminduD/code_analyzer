@@ -160,5 +160,40 @@
         message  => "Potential malware persistence mechanism detected (Windows Run key or Linux autostart)",
         severity => "HIGH",
         fix      => "Remove auto-start functionality unless explicitly required by the application",
+    },
+    {
+        id       => "CPP008",
+        pattern  => qr/\b(?:VirtualAllocEx|WriteProcessMemory|CreateRemoteThread|NtCreateThreadEx|RtlCreateUserThread|QueueUserAPC)\s*\(/,
+        message  => "Process injection API detected (VirtualAllocEx/WriteProcessMemory/CreateRemoteThread). Core technique used by RATs, trojans, and rootkits to inject code into other processes.",
+        severity => "CRITICAL",
+        fix      => "Remove process injection code. These APIs should not appear in legitimate application code.",
+    },
+    {
+        id       => "CPP009",
+        pattern  => qr/\b(?:IsDebuggerPresent|CheckRemoteDebuggerPresent|NtQueryInformationProcess)\s*\(\s*\)|ptrace\s*\(\s*PTRACE_TRACEME/,
+        message  => "Anti-debugging technique detected. Malware uses these APIs to detect and evade analysis environments.",
+        severity => "HIGH",
+        fix      => "Remove debugger detection code. If DRM is required, use a vetted and documented library.",
+    },
+    {
+        id       => "CPP010",
+        pattern  => qr/(?:CreateFile|std::ofstream)\s*\(.*?\).*?(?:WriteFile|\.write\s*\()/s,
+        message  => "File dropper pattern: file creation combined with binary write. Used by malware droppers to write second-stage payloads to disk.",
+        severity => "HIGH",
+        fix      => "Review all file write logic. Ensure filenames are strictly controlled and executable content is never written dynamically.",
+    },
+    {
+        id       => "CPP011",
+        pattern  => qr/\bCryptEncrypt\s*\(/,
+        message  => "CryptEncrypt API detected. Bulk file encryption in a loop is the core mechanic of ransomware.",
+        severity => "HIGH",
+        fix      => "Review all encryption logic involving files. Bulk encryption of user data is a ransomware indicator.",
+    },
+    {
+        id       => "CPP012",
+        pattern  => qr/(?:for|while)\s*\(.*?(?:\n.*?){0,5}\b(?:CreateDirectory|mkdir|std::filesystem::create_directories)\s*\(/s,
+        message  => "Potential directory bomb: directory-creation call inside a loop can exhaust filesystem resources (DoS).",
+        severity => "HIGH",
+        fix      => "Bound directory creation in loops. Validate target paths and add a hard creation limit.",
     }
 ]
