@@ -75,7 +75,11 @@ sub generate_json {
     
     my $json = JSON::PP->new->pretty->encode(\%report);
     
-    open my $fh, '>', $output_file or die "Could not open $output_file for writing: $!\n";
+    my $fh;
+    unless (open $fh, '>', $output_file) {
+        warn "Error: Could not open JSON file '$output_file' for writing: $!\n";
+        return;
+    }
     print $fh $json;
     close $fh;
     
@@ -505,7 +509,11 @@ HTML
 </html>
 HTML
 
-    open my $fh, '>', $output_file or die "Could not open $output_file for writing: $!\n";
+    my $fh;
+    unless (open $fh, '>', $output_file) {
+        warn "Error: Could not open HTML report file '$output_file' for writing: $!\n";
+        return;
+    }
     print $fh $html;
     close $fh;
 }
