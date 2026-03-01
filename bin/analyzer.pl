@@ -5,6 +5,7 @@ use warnings;
 use Getopt::Long;
 use File::Spec;
 use FindBin;
+use Carp;
 use lib "$FindBin::Bin/../lib";
 
 use Scanner;
@@ -21,6 +22,18 @@ my $html_out;
 my $severity_filter;
 my $serve;
 
+# Setup global error handler for uncaught exceptions
+$SIG{__DIE__} = sub {
+    my $error = shift;
+    # Don't intercept errors if they're inside an eval
+    return if $^S; 
+    
+    print color('bold bright_red'), "\n [FATAL ERROR] ", color('reset');
+    print "$error\n";
+    print color('bright_black'), " Execution aborted. Please check the logs or inputs.\n", color('reset');
+    exit 1;
+};
+
 GetOptions(
     "path=s"     => \$path,
     "lang=s"     => \$lang,
@@ -28,10 +41,12 @@ GetOptions(
     "html=s"     => \$html_out,
     "severity=s" => \$severity_filter,
     "serve"      => \$serve,
-) or die "Error parsing command line arguments\n";
+) or croak "Error parsing command line arguments\n";
 
 if (!$path || !$lang) {
-    die "Usage: $0 --path <dir> --lang <all|c|cpp|php|python|js|java|rust|go|lua|asm|ada|cobol|pascal|ruby|csharp|r|swift|kotlin|typescript|scala|perl|bash|haskell> [--json report.json] [--html report.html] [--severity <LOW|MEDIUM|HIGH>] [--serve]\n";
+    print color('bold bright_red'), "\n [ERROR] Missing required arguments.\n\n", color('reset');
+    print " Usage: $0 --path <dir> --lang <all|c|cpp|php|python|js|java|rust|go|lua|asm|ada|cobol|pascal|ruby|csharp|r|swift|kotlin|typescript|scala|perl|bash|haskell> [--json report.json] [--html report.html] [--severity <LOW|MEDIUM|HIGH>] [--serve]\n\n";
+    exit 1;
 }
 
 # Determine rules directory
@@ -59,7 +74,7 @@ if (-f $secrets_file) {
     } elsif (ref($loaded) eq 'ARRAY') {
         $universal_rules = $loaded;
     } else {
-        warn "Warning: Universal rules must be an array reference.\n";
+        carp "Warning: Universal rules must be an array reference.\n";
     }
 }
 
@@ -79,7 +94,7 @@ foreach my $file_meta (@$files) {
             $loaded_rules{$file_lang} = RuleEngine::load_rules($rules_dir, $file_lang);
         };
         if ($@) {
-            warn "Warning: Error loading rules for $file_lang: $@\n";
+            carp "Warning: Error loading rules for $file_lang: $@\n";
             $loaded_rules{$file_lang} = [];
         }
     }
@@ -107,7 +122,7 @@ if ($severity_filter) {
     if ($filter eq 'HIGH' || $filter eq 'MEDIUM' || $filter eq 'LOW') {
         @all_vulnerabilities = grep { uc($_->{severity}) eq $filter } @all_vulnerabilities;
     } else {
-        warn "Warning: Unknown severity filter '$severity_filter'. Ignored.\n";
+        carp "Warning: Unknown severity filter '$severity_filter'. Ignored.\n";
     }
 }
 
