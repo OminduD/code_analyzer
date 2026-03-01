@@ -2,6 +2,7 @@ package Tokenizer;
 
 use strict;
 use warnings;
+use Carp;
 
 # Reads a file, strips comments, and normalizes whitespaces
 sub tokenize_file {
@@ -9,7 +10,7 @@ sub tokenize_file {
     
     my $fh;
     unless (open $fh, '<', $file) {
-        warn "Warning: Could not open file '$file' for tokenization: $!\n";
+        carp "Warning: Could not open file '$file' for tokenization: $!\n";
         return [];
     }
     my @lines = <$fh>;
