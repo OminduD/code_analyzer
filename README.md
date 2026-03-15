@@ -150,3 +150,13 @@ If you wish to add **Global Secret or Malware rules**, update `rules/secrets_rul
 - `message`: A descriptive summary of what the rule detects.
 - `severity`: Must be `HIGH`, `MEDIUM`, or `LOW`.
 - `fix`: A suggested remediation step.
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome!
+
+Feel free to check out the [issues page](https://github.com/OminduD/code_analyzer/issues) if you want to contribute. For detailed instructions on how to set up the development environment, extend the rules, and submit Pull Requests, please read the [Contributing Guidelines](CONTRIBUTING.md).
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
