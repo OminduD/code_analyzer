@@ -10,29 +10,32 @@ sub scan_directory {
     my ($target_dir, $lang) = @_;
     
     my %extensions = (
-        'c'      => qr/\.c$/,
-        'php'    => qr/\.php$/,
-        'python' => qr/\.py$/,
-        'js'     => qr/\.js$/,
-        'java'   => qr/\.java$/,
-        'rust'   => qr/\.rs$/,
-        'lua'    => qr/\.lua$/,
-        'go'     => qr/\.go$/,
-        'cpp'    => qr/\.(?:cpp|cxx|cc|hpp|h)$/,
-        'asm'    => qr/\.(?:asm|s)$/,
-        'ada'    => qr/\.(?:adb|ads)$/,
-        'cobol'  => qr/\.(?:cbl|cob|cpy)$/,
-        'pascal' => qr/\.(?:pas|inc)$/,
-        'ruby'   => qr/\.rb$/,
-        'csharp' => qr/\.cs$/,
-        'r'      => qr/\.(?:R|r)$/,
-        'swift'  => qr/\.swift$/,
-        'kotlin' => qr/\.kt[s]?$/,
+        'c'          => qr/\.c$/,
+        'php'        => qr/\.php$/,
+        'python'     => qr/\.py$/,
+        'js'         => qr/\.js$/,
+        'java'       => qr/\.java$/,
+        'rust'       => qr/\.rs$/,
+        'lua'        => qr/\.lua$/,
+        'go'         => qr/\.go$/,
+        'cpp'        => qr/\.(?:cpp|cxx|cc|hpp|h)$/,
+        'asm'        => qr/\.(?:asm|s)$/,
+        'ada'        => qr/\.(?:adb|ads)$/,
+        'cobol'      => qr/\.(?:cbl|cob|cpy)$/,
+        'pascal'     => qr/\.(?:pas|inc)$/,
+        'ruby'       => qr/\.rb$/,
+        'csharp'     => qr/\.cs$/,
+        'r'          => qr/\.(?:R|r)$/,
+        'swift'      => qr/\.swift$/,
+        'kotlin'     => qr/\.kt[s]?$/,
         'typescript' => qr/\.ts$/,
-        'scala'  => qr/\.scala$/,
-        'perl'   => qr/\.(?:pl|pm|t)$/,
-        'bash'   => qr/\.sh$/,
-        'haskell' => qr/\.(?:hs|lhs)$/,
+        'scala'      => qr/\.scala$/,
+        'perl'       => qr/\.(?:pl|pm|t)$/,
+        'bash'       => qr/\.sh$/,
+        'haskell'    => qr/\.(?:hs|lhs)$/,
+        'env'        => qr/(?:^\.env(?:\.[a-zA-Z0-9_\-]+)?$|\.env$)/,
+        'config'     => qr/\.(?:json|ya?ml|toml|ini|conf|cfg|properties|xml)$/i,
+        'sql'        => qr/\.sql$/i,
     );
     
     my $ext_regex;
@@ -51,13 +54,16 @@ sub scan_directory {
         my $file = $_;
         my $dir  = $File::Find::dir;
         
-        # Skip ignored directories
-        if ($file eq 'vendor' || $file eq 'node_modules' || $file eq 'build') {
+        # Skip ignored directories and version control
+        if ($file =~ /^(?:vendor|node_modules|build|dist|\.git|__pycache__|\.idea|\.vscode|\.pytest_cache)$/) {
             $File::Find::prune = 1;
             return;
         }
         
         if (-f $file) {
+            # Skip package manager lockfiles to prevent false alarms on package hashes
+            return if $file =~ /^(?:package-lock\.json|yarn\.lock|pnpm-lock\.yaml|composer\.lock|Cargo\.lock|Gemfile\.lock)$/;
+
             if ($ext_regex) {
                 # Single language mode
                 if ($file =~ /$ext_regex/) {
@@ -65,7 +71,7 @@ sub scan_directory {
                 }
             } else {
                 # 'all' language mode
-                foreach my $l (keys %extensions) {
+                foreach my $l (sort keys %extensions) {
                     my $regex = $extensions{$l};
                     if ($file =~ /$regex/) {
                         push @files, { path => $File::Find::name, lang => $l };

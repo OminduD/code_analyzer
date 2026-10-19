@@ -4,6 +4,50 @@ use strict;
 use warnings;
 use Carp;
 
+# Helper to strip single-line comments only when outside string literals
+sub _strip_comment {
+    my ($line, $marker) = @_;
+    return $line unless index($line, $marker) >= 0;
+    
+    my $in_single = 0;
+    my $in_double = 0;
+    my $escaped   = 0;
+    my $len       = length($line);
+    my $idx       = 0;
+    my $m_len     = length($marker);
+    
+    while ($idx < $len) {
+        my $char = substr($line, $idx, 1);
+        if ($escaped) {
+            $escaped = 0;
+            $idx++;
+            next;
+        }
+        if ($char eq '\\') {
+            $escaped = 1;
+            $idx++;
+            next;
+        }
+        if ($char eq '"' && !$in_single) {
+            $in_double = !$in_double;
+            $idx++;
+            next;
+        }
+        if ($char eq "'" && !$in_double) {
+            $in_single = !$in_single;
+            $idx++;
+            next;
+        }
+        if (!$in_single && !$in_double) {
+            if (substr($line, $idx, $m_len) eq $marker) {
+                return substr($line, 0, $idx);
+            }
+        }
+        $idx++;
+    }
+    return $line;
+}
+
 # Reads a file, strips comments, and normalizes whitespaces
 sub tokenize_file {
     my ($file, $lang) = @_;
@@ -32,9 +76,10 @@ sub tokenize_file {
             if (!$in_block_comment && $line =~ s/\/\*.*//) { $in_block_comment = 1; }
             if (!$in_block_comment) {
                 if ($lang eq 'php') {
-                    $line =~ s/(?:\/\/|#).*//; # PHP has both
+                    $line = _strip_comment($line, '//');
+                    $line = _strip_comment($line, '#');
                 } else {
-                    $line =~ s/\/\/.*//;
+                    $line = _strip_comment($line, '//');
                 }
             }
         
@@ -45,7 +90,9 @@ sub tokenize_file {
             }
             if (!$in_block_comment && $line =~ s/("""|''').*?\1//g) { }
             if (!$in_block_comment && $line =~ s/("""|''').*//) { $in_block_comment = 1; }
-            if (!$in_block_comment) { $line =~ s/#.*//; }
+            if (!$in_block_comment) {
+                $line = _strip_comment($line, '#');
+            }
 
         # 3. Hash-Style (Ruby, R, Perl, Bash)
         } elsif ($lang =~ /^(ruby|r|perl|bash)$/) {
@@ -54,7 +101,9 @@ sub tokenize_file {
             if ($lang eq 'perl' && $line =~ /^=pod/) { $in_block_comment = 1; $line = ''; }
             if ($lang eq 'perl' && $in_block_comment && $line =~ /^=cut/) { $in_block_comment = 0; $line = ''; }
             
-            if (!$in_block_comment) { $line =~ s/#.*//; }
+            if (!$in_block_comment) {
+                $line = _strip_comment($line, '#');
+            }
 
         # 4. Lua-Style (--[[ ]] and --)
         } elsif ($lang eq 'lua') {
@@ -106,6 +155,20 @@ sub tokenize_file {
             if (!$in_block_comment && $line =~ s/\{-.*?-}//g) { }
             if (!$in_block_comment && $line =~ s/\{-.*//) { $in_block_comment = 1; }
             if (!$in_block_comment) { $line =~ s/--.*//; }
+
+        # 9. Config, Environment & SQL files
+        } elsif ($lang =~ /^(env|config|sql)$/) {
+            # For SQL files, strip block comments if present
+            if ($lang eq 'sql') {
+                if ($in_block_comment) {
+                    if ($line =~ s/^.*?\*\///) { $in_block_comment = 0; } else { $line = ''; }
+                }
+                if (!$in_block_comment && $line =~ s/\/\*.*?\*\///g) { }
+                if (!$in_block_comment && $line =~ s/\/\*.*//) { $in_block_comment = 1; }
+            }
+            # Note: For .env and config files, we deliberately DO NOT strip # comments,
+            # because developers frequently comment out sensitive credentials instead
+            # of rotating them, leaving them exposed in version control.
         }
         
         # Normalize whitespace

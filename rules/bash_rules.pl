@@ -69,5 +69,32 @@
         message  => "Fork bomb or recursive process spawner detected in Bash. Subshell spawning inside a function that calls itself (fork bomb pattern) will exhaust all available process slots instantly.",
         severity => "CRITICAL",
         fix      => "Remove fork bombs and self-referential process spawning. Set 'ulimit -u <N>' in system profile to limit max user processes.",
+    },
+    {
+        id       => "BASH010",
+        type     => "vulnerability",
+        cwe      => "CWE-732",
+        pattern  => qr/\bchmod\s+(?:-R\s+)?777\b/,
+        message  => "Setting world-writable file permissions (chmod 777) allows any user on the system to modify or execute files",
+        severity => "HIGH",
+        fix      => "Restrict permissions to least privilege required (e.g. chmod 750 or chmod 640)",
+    },
+    {
+        id       => "BASH011",
+        type     => "vulnerability",
+        cwe      => "CWE-377",
+        pattern  => qr/>\s*\/tmp\/[a-zA-Z0-9_\-\.]+\b(?!.*mktemp)/,
+        message  => "Predictable temporary file in /tmp/ is vulnerable to symlink race condition attacks",
+        severity => "MEDIUM",
+        fix      => "Use 'mktemp' or 'mktemp -d' to securely generate unique, unpredictable temporary files",
+    },
+    {
+        id       => "BASHERR001",
+        type     => "error",
+        cwe      => "CWE-704",
+        pattern  => qr/\[\s+\$[a-zA-Z0-9_]+\s*(=|!=|<|>)\s*[^\]]+\]/,
+        message  => "Unquoted variable in test expression '[' will cause a syntax error if variable is empty or contains spaces",
+        severity => "LOW",
+        fix      => "Quote variables in test: [ \"\$var\" = \"val\" ] or use modern test operator: [[ \$var == val ]]",
     }
 ]

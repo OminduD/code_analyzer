@@ -13,6 +13,7 @@ use Tokenizer;
 use RuleEngine;
 use Scorer;
 use Reporter;
+use PlagiarismDetector;
 use Term::ANSIColor;
 
 my $path;
@@ -20,6 +21,9 @@ my $lang;
 my $json_out;
 my $html_out;
 my $severity_filter;
+my $type_filter;
+my $check_plagiarism = 1;
+my $min_similarity = 50;
 my $serve;
 
 # Setup global error handler for uncaught exceptions
@@ -35,17 +39,22 @@ $SIG{__DIE__} = sub {
 };
 
 GetOptions(
-    "path=s"     => \$path,
-    "lang=s"     => \$lang,
-    "json=s"     => \$json_out,
-    "html=s"     => \$html_out,
-    "severity=s" => \$severity_filter,
-    "serve"      => \$serve,
+    "path=s"             => \$path,
+    "lang=s"             => \$lang,
+    "json=s"             => \$json_out,
+    "html=s"             => \$html_out,
+    "severity=s"         => \$severity_filter,
+    "type=s"             => \$type_filter,
+    "plagiarism!"        => \$check_plagiarism,
+    "min-similarity=i"   => \$min_similarity,
+    "serve"              => \$serve,
 ) or croak "Error parsing command line arguments\n";
 
 if (!$path || !$lang) {
     print color('bold bright_red'), "\n [ERROR] Missing required arguments.\n\n", color('reset');
-    print " Usage: $0 --path <dir> --lang <all|c|cpp|php|python|js|java|rust|go|lua|asm|ada|cobol|pascal|ruby|csharp|r|swift|kotlin|typescript|scala|perl|bash|haskell> [--json report.json] [--html report.html] [--severity <LOW|MEDIUM|HIGH>] [--serve]\n\n";
+    print " Usage: $0 --path <dir> --lang <all|c|cpp|php|python|js|java|rust|go|lua|asm|ada|cobol|pascal|ruby|csharp|r|swift|kotlin|typescript|scala|perl|bash|haskell|env|config|sql>\n";
+    print "        [--json report.json] [--html report.html] [--severity <LOW|MEDIUM|HIGH>] [--type <all|vulnerability|error|malware|secret>]\n";
+    print "        [--no-plagiarism] [--min-similarity <pct> (default: 50)] [--serve]\n\n";
     exit 1;
 }
 
@@ -115,19 +124,43 @@ foreach my $file_meta (@$files) {
     push @all_vulnerabilities, @$vulns;
 }
 
+# 4. Plagiarism & Code Clone Tracking
+my $plagiarism_data = {
+    clones  => [],
+    summary => {
+        total_clones       => 0,
+        highest_similarity => 0,
+        originality_score  => 100,
+        duplicated_loc     => 0,
+        files_with_clones  => 0,
+    }
+};
+
+if ($check_plagiarism && scalar(@$files) > 0) {
+    print "Running plagiarism & code clone analysis...\n";
+    $plagiarism_data = PlagiarismDetector::detect_clones($files, {
+        min_similarity => $min_similarity,
+    });
+}
+
 my $end_time = time();
 my $duration = $end_time - $start_time;
 $duration = 1 if $duration == 0; # Prevent 0s duration display
 
-
 # Apply severity filter if specified
 if ($severity_filter) {
     my $filter = uc($severity_filter);
-    if ($filter eq 'HIGH' || $filter eq 'MEDIUM' || $filter eq 'LOW') {
-        @all_vulnerabilities = grep { uc($_->{severity}) eq $filter } @all_vulnerabilities;
+    if ($filter eq 'HIGH' || $filter eq 'MEDIUM' || $filter eq 'LOW' || $filter eq 'CRITICAL') {
+        @all_vulnerabilities = grep { uc($_->{severity} || '') eq $filter } @all_vulnerabilities;
     } else {
         carp "Warning: Unknown severity filter '$severity_filter'. Ignored.\n";
     }
+}
+
+# Apply type filter if specified (vulnerability, error, malware, secret)
+if ($type_filter && lc($type_filter) ne 'all') {
+    my $t_filter = lc($type_filter);
+    @all_vulnerabilities = grep { lc($_->{type} || 'vulnerability') eq $t_filter } @all_vulnerabilities;
 }
 
 # Add Metadata payload
@@ -140,19 +173,19 @@ my %metadata = (
     duration_secs => $duration,
 );
 
-# 4. Calculate score
-my $score_data = Scorer::calculate_score(\@all_vulnerabilities);
+# 5. Calculate scores and quality metrics
+my $score_data = Scorer::calculate_score(\@all_vulnerabilities, $plagiarism_data);
 
-# 5. Output reports
-Reporter::print_terminal(\@all_vulnerabilities, $score_data, \%metadata);
+# 6. Output reports
+Reporter::print_terminal(\@all_vulnerabilities, $score_data, \%metadata, $plagiarism_data);
 
 if ($json_out) {
-    Reporter::generate_json(\@all_vulnerabilities, $score_data, \%metadata, $json_out);
+    Reporter::generate_json(\@all_vulnerabilities, $score_data, \%metadata, $plagiarism_data, $json_out);
 }
 
 # Always generate HTML report
 $html_out ||= "security_report.html";
-Reporter::generate_html(\@all_vulnerabilities, $score_data, \%metadata, $html_out);
+Reporter::generate_html(\@all_vulnerabilities, $score_data, \%metadata, $plagiarism_data, $html_out);
 
 my $abs_path = File::Spec->rel2abs($html_out);
 print color('bold bright_green'), "\n 📊 Web Report Generated!\n", color('reset');

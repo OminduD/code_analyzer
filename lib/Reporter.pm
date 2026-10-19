@@ -8,14 +8,14 @@ use File::Basename;
 use Carp;
 
 sub print_terminal {
-    my ($vulnerabilities, $score_data, $metadata) = @_;
+    my ($vulnerabilities, $score_data, $metadata, $plagiarism_data) = @_;
     
     print color('bold cyan');
     print "\n";
     print " ╔══════════════════════════════════════════════════════════════╗\n";
     print " ║                                                              ║\n";
     print " ║           PERL STATIC CODE SECURITY ANALYZER                 ║\n";
-    print " ║                  Advanced Analysis Tool                      ║\n";
+    print " ║         Security, Code Quality & Plagiarism Engine           ║\n";
     print " ║                                                              ║\n";
     print " ╚══════════════════════════════════════════════════════════════╝\n";
     print color('reset');
@@ -27,51 +27,97 @@ sub print_terminal {
         printf(" │ %-15s: %-42s │\n", "Target Path", $metadata->{target_path});
         printf(" │ %-15s: %-42s │\n", "Language", uc($metadata->{language}));
         printf(" │ %-15s: %-42s │\n", "Files Scanned", $metadata->{files_scanned});
+        printf(" │ %-15s: %-42s │\n", "Total LOC", $metadata->{total_loc});
+        printf(" │ %-15s: %-42s │\n", "Duration", $metadata->{duration_secs} . "s");
         print " └──────────────────────────────────────────────────────────────┘\n\n";
         print color('reset');
     }
     
     my %color_map = (
-        HIGH   => 'bold bright_red',
-        MEDIUM => 'bold bright_yellow',
-        LOW    => 'bold bright_green',
+        CRITICAL => 'bold bright_magenta',
+        HIGH     => 'bold bright_red',
+        MEDIUM   => 'bold bright_yellow',
+        LOW      => 'bold bright_green',
+        INFO     => 'bold bright_cyan',
+    );
+
+    my %type_map = (
+        vulnerability => 'VULN',
+        error         => 'BUG/ERROR',
+        malware       => 'MALWARE',
+        secret        => 'SECRET',
     );
     
     if (!@$vulnerabilities) {
-        print color('bold bright_green'), " [OK] PERFECT. No vulnerabilities found! Code looks clean.\n\n", color('reset');
+        print color('bold bright_green'), " [OK] PERFECT. Zero security vulnerabilities or code errors found!\n\n", color('reset');
     }
     
     foreach my $vuln (@$vulnerabilities) {
-        my $sev = uc($vuln->{severity});
+        my $sev = uc($vuln->{severity} || 'LOW');
         my $cat_color = $color_map{$sev} || 'reset';
+        my $type = uc($vuln->{type} || 'VULNERABILITY');
+        my $cwe_str = $vuln->{cwe} ? " [$vuln->{cwe}]" : "";
         
         print color($cat_color), " > [$sev] ", color('reset');
         print color('bold white'), "$vuln->{file}:$vuln->{line}", color('reset');
-        print color('bright_black'), " (Rule: $vuln->{rule_id})\n", color('reset');
+        print color('bright_black'), " (Rule: $vuln->{rule_id}$cwe_str) ", color('bold cyan'), "[$type]\n", color('reset');
         print "    ├─ Message : $vuln->{message}\n";
         print "    ├─ Snippet : ", color('bright_red'), "$vuln->{snippet}\n", color('reset');
         print "    └─ Fix     : ", color('bright_green'), "$vuln->{fix}\n", color('reset');
         print "\n";
     }
+
+    # Plagiarism / Code Clones Section
+    if ($plagiarism_data && $plagiarism_data->{summary} && $plagiarism_data->{summary}{total_clones} > 0) {
+        my $p_sum = $plagiarism_data->{summary};
+        print color('bold magenta');
+        print " ╭── Plagiarism & Code Clones ──────────────────────────────╮\n";
+        print color('reset');
+        printf(" │  Total Clones Detected : %-31s │\n", $p_sum->{total_clones});
+        printf(" │  Highest Similarity    : %-31s │\n", $p_sum->{highest_similarity} . "%");
+        printf(" │  Originality Index     : %-31s │\n", $p_sum->{originality_score} . "%");
+        printf(" │  Duplicated LOC        : %-31s │\n", $p_sum->{duplicated_loc} . " lines");
+        print color('bold magenta'), " ╰──────────────────────────────────────────────────────────╯\n", color('reset');
+
+        print color('bold white'), "\n  Top Duplication & Clone Matches:\n", color('reset');
+        for my $cl (@{$plagiarism_data->{clones}}[0 .. (@{$plagiarism_data->{clones}} > 5 ? 4 : $#{$plagiarism_data->{clones}})]) {
+            my $sim_color = $cl->{similarity} >= 80 ? 'bold bright_red' : ($cl->{similarity} >= 60 ? 'bold bright_yellow' : 'bold bright_green');
+            print color($sim_color), "   • [$cl->{similarity}% Match] ", color('reset');
+            print color('bold cyan'), "$cl->{file_a}:$cl->{line_a_start}-$cl->{line_a_end}", color('reset');
+            print " ⟷ ";
+            print color('bold cyan'), "$cl->{file_b}:$cl->{line_b_start}-$cl->{line_b_end}", color('reset');
+            print color('bright_black'), " ($cl->{clone_type})\n", color('reset');
+        }
+        print "\n";
+    }
     
-    print "\n", color('bold cyan'), " ╭── Risk Summary ──────────────────────────╮", color('reset'), "\n";
+    print "\n", color('bold cyan'), " ╭── Executive Summary ─────────────────────────╮", color('reset'), "\n";
     
     my $cat_color = $score_data->{category} eq 'CRITICAL' ? 'bold bright_red' :
                     $score_data->{category} eq 'MODERATE' ? 'bold bright_yellow' : 'bold bright_green';
                     
-    printf(" │  Total Risk Score : %-20s │\n", $score_data->{score});
-    print  " │  Risk Category    : ";
-    print color($cat_color), sprintf("%-20s", $score_data->{category}), color('reset'), " │\n";
-    print color('bold cyan'), " ╰──────────────────────────────────────────╯", color('reset'), "\n\n";
+    printf(" │  Total Risk Score    : %-22s │\n", $score_data->{score});
+    print  " │  Risk Category       : ";
+    print color($cat_color), sprintf("%-22s", $score_data->{category}), color('reset'), " │\n";
+    printf(" │  Code Quality Index  : %-22s │\n", $score_data->{quality_score} . "% (Grade: $score_data->{quality_grade})");
+    printf(" │  Vulnerabilities     : %-22s │\n", $score_data->{by_type}{vulnerability} // 0);
+    printf(" │  Code Errors / Bugs  : %-22s │\n", $score_data->{by_type}{error} // 0);
+    printf(" │  Malware Indicators  : %-22s │\n", $score_data->{by_type}{malware} // 0);
+    printf(" │  Exposed Secrets     : %-22s │\n", $score_data->{by_type}{secret} // 0);
+    if ($plagiarism_data && $plagiarism_data->{summary}) {
+        printf(" │  Max Plagiarism Sim  : %-22s │\n", ($plagiarism_data->{summary}{highest_similarity} // 0) . "%");
+    }
+    print color('bold cyan'), " ╰──────────────────────────────────────────────╯", color('reset'), "\n\n";
 }
 
 sub generate_json {
-    my ($vulnerabilities, $score_data, $metadata, $output_file) = @_;
+    my ($vulnerabilities, $score_data, $metadata, $plagiarism_data, $output_file) = @_;
     
     my %report = (
         metadata        => $metadata,
         summary         => $score_data,
         vulnerabilities => $vulnerabilities,
+        plagiarism      => $plagiarism_data // {},
     );
     
     my $json = JSON::PP->new->pretty->encode(\%report);
@@ -88,422 +134,1512 @@ sub generate_json {
 }
 
 sub generate_html {
-    my ($vulnerabilities, $score_data, $metadata, $output_file) = @_;
+    my ($vulnerabilities, $score_data, $metadata, $plagiarism_data, $output_file) = @_;
     
+    $plagiarism_data ||= {
+        clones  => [],
+        summary => { total_clones => 0, highest_similarity => 0, originality_score => 100, duplicated_loc => 0, files_with_clones => 0 }
+    };
+
     my $vuln_rows = '';
-    my %counts = ( HIGH => 0, MEDIUM => 0, LOW => 0 );
+    my %counts = ( CRITICAL => 0, HIGH => 0, MEDIUM => 0, LOW => 0 );
+    my %type_counts = (
+        vulnerability => 0,
+        error         => 0,
+        malware       => 0,
+        secret        => 0,
+    );
     my %rule_counts;
     my %file_counts;
+    my %posture_hits = (
+        INJECTION    => 0,
+        EXFILTRATION => 0,
+        PERSISTENCE  => 0,
+        ISOLATION    => 0,
+        HYGIENE      => 0,
+    );
     
     foreach my $vuln (@$vulnerabilities) {
-        my $sev = uc($vuln->{severity});
+        my $sev = uc($vuln->{severity} || 'LOW');
+        $sev = 'HIGH' unless exists $counts{$sev};
         $counts{$sev}++;
         
-        my $rule = $vuln->{rule_id};
+        my $type = lc($vuln->{type} || 'vulnerability');
+        $type = 'vulnerability' unless exists $type_counts{$type};
+        $type_counts{$type}++;
+
+        my $rule = $vuln->{rule_id} || 'GEN001';
         $rule_counts{$rule}++;
         
         my $sev_class = lc($sev);
         my $file_name = basename($vuln->{file});
         $file_counts{$file_name}++;
         
-        # Escape HTML manually to avoid dependencies
+        # Categorize for Security Posture
+        my $msg_rule = lc(($vuln->{message} || '') . ' ' . $rule);
+        if ($msg_rule =~ /(inject|eval|exec|cmd|shell|sql|popen|call)/) {
+            $posture_hits{INJECTION}++;
+        } elsif ($msg_rule =~ /(net|exfil|socket|packet|passwd|shadow|token|secret|key|cred)/) {
+            $posture_hits{EXFILTRATION}++;
+        } elsif ($msg_rule =~ /(reg|run|autostart|persist|replicat|worm|updater)/) {
+            $posture_hits{PERSISTENCE}++;
+        } elsif ($msg_rule =~ /(fork|process|hidden|miner|bomb|malware|detached)/) {
+            $posture_hits{ISOLATION}++;
+        } else {
+            $posture_hits{HYGIENE}++;
+        }
+        
         my $snippet = _escape_html($vuln->{snippet});
         my $message = _escape_html($vuln->{message});
         my $fix     = _escape_html($vuln->{fix});
+        my $file_path = _escape_html($vuln->{file});
+        my $cwe_badge = $vuln->{cwe} ? qq{<span class="cwe-badge">$vuln->{cwe}</span>} : '';
+        my $type_label = uc($type);
         
         $vuln_rows .= <<"HTML";
-            <tr class="vuln-row" data-severity="$sev_class">
-                <td title="$vuln->{file}"><strong>$file_name</strong><br><span style="color:#7f8c8d; font-size:0.85em;">Line $vuln->{line}</span></td>
-                <td><span class="rule-badge">$vuln->{rule_id}</span></td>
-                <td><span class="sev-$sev_class">$sev</span></td>
-                <td>$message</td>
-                <td><code>$snippet</code></td>
-                <td>$fix</td>
+            <tr class="vuln-row" data-severity="$sev_class" data-type="$type" data-search="$file_name $vuln->{line} $rule $sev $type $message">
+                <td class="col-loc" title="$file_path">
+                    <span class="file-name">$file_name</span>
+                    <span class="line-badge">Line $vuln->{line}</span>
+                </td>
+                <td class="col-type"><span class="type-badge type-$type">$type_label</span></td>
+                <td class="col-rule"><span class="rule-badge">$rule</span>$cwe_badge</td>
+                <td class="col-sev"><span class="sev-badge sev-$sev_class">$sev</span></td>
+                <td class="col-msg">$message</td>
+                <td class="col-code"><code>$snippet</code></td>
+                <td class="col-fix"><div class="fix-box">$fix</div></td>
             </tr>
 HTML
     }
     
+    my $total_vulns = scalar(@$vulnerabilities);
+    
     # Sort top rules for the bar chart
     my @top_rules = sort { $rule_counts{$b} <=> $rule_counts{$a} } keys %rule_counts;
-    @top_rules = splice(@top_rules, 0, 5) if @top_rules > 5; # Get top 5
+    @top_rules = splice(@top_rules, 0, 5) if @top_rules > 5;
     
-    my $top_rules_labels = "[" . join(",", map { "'$_'" } @top_rules) . "]";
-    my $top_rules_data   = "[" . join(",", map { $rule_counts{$_} } @top_rules) . "]";
+    my $max_rule_count = @top_rules ? $rule_counts{$top_rules[0]} : 1;
+    $max_rule_count = 1 if $max_rule_count == 0;
+    
+    # Calculate security posture scores (0-100)
+    my sub _calc_posture {
+        my ($hits) = @_;
+        return 100 if $hits == 0;
+        my $res = 100 - ($hits * 14);
+        return $res < 20 ? 20 : $res;
+    }
+    
+    my $posture_injection    = _calc_posture($posture_hits{INJECTION});
+    my $posture_exfiltration = _calc_posture($posture_hits{EXFILTRATION});
+    my $posture_persistence  = _calc_posture($posture_hits{PERSISTENCE});
+    my $posture_isolation    = _calc_posture($posture_hits{ISOLATION});
+    my $posture_hygiene      = _calc_posture($posture_hits{HYGIENE});
+    
+    my $quality_score = $score_data->{quality_score} // 100;
+    my $quality_grade = $score_data->{quality_grade} // 'A+';
+    my $originality_score = $plagiarism_data->{summary}{originality_score} // 100;
+    my $highest_plagiarism = $plagiarism_data->{summary}{highest_similarity} // 0;
+    my $total_clones = $plagiarism_data->{summary}{total_clones} // 0;
 
-    # Sort top vulnerable files
-    my @top_files = sort { $file_counts{$b} <=> $file_counts{$a} } keys %file_counts;
-    @top_files = splice(@top_files, 0, 5) if @top_files > 5;
+    my $cat_class = lc($score_data->{category} || 'clean');
+    my $score = $score_data->{score} || 0;
+    my $category = uc($score_data->{category} || 'CLEAN');
     
-    my $top_files_labels = "[" . join(",", map { "'$_'" } @top_files) . "]";
-    my $top_files_data   = "[" . join(",", map { $file_counts{$_} } @top_files) . "]";
+    # Generate bar chart items HTML
+    my @bar_palette = ('#f87171', '#60a5fa', '#4ade80', '#fbbf24', '#a78bfa');
+    my $bar_items_html = '';
+    for my $i (0 .. $#top_rules) {
+        my $r = $top_rules[$i];
+        my $val = $rule_counts{$r};
+        my $color = $bar_palette[$i % @bar_palette];
+        my $pct = int(($val / $max_rule_count) * 100);
+        $pct = 15 if $pct < 15; # Minimum height for text
+        $bar_items_html .= <<"HTML";
+          <div class="bar-col group" data-idx="$i">
+            <div class="bar-fill" style="height: ${pct}%; background-color: $color;" title="$r: $val occurrences">
+              <div class="bar-texture"></div>
+              <span class="bar-count">$val</span>
+              <span class="bar-label">$r</span>
+            </div>
+            <div class="bar-tooltip">$r: $val hits</div>
+          </div>
+HTML
+    }
+    if (!@top_rules) {
+        $bar_items_html = '<div class="no-findings-msg">✅ PERFECT! Zero rule violations or code errors detected.</div>';
+    }
 
-    my $cat_class = lc($score_data->{category});
-    my $score = $score_data->{score};
-    my $category = $score_data->{category};
-    
+    # Generate Plagiarism Cards HTML
+    my $clones_html = '';
+    my $clone_list = $plagiarism_data->{clones} || [];
+    for my $c_idx (0 .. $#{$clone_list}) {
+        my $c = $clone_list->[$c_idx];
+        my $sim = $c->{similarity};
+        my $sim_class = $sim >= 80 ? 'sim-high' : ($sim >= 60 ? 'sim-med' : 'sim-low');
+        my $sim_color = $sim >= 80 ? 'var(--critical)' : ($sim >= 60 ? 'var(--medium)' : 'var(--low)');
+        my $file_a_base = basename($c->{file_a});
+        my $file_b_base = basename($c->{file_b});
+        my $snippet_a_esc = _escape_html($c->{snippet_a});
+        my $snippet_b_esc = _escape_html($c->{snippet_b});
+
+        $clones_html .= <<"HTML";
+        <div class="clone-card">
+            <div class="clone-header">
+                <div class="clone-title-group">
+                    <span class="clone-sim-badge" style="background: $sim_color; color: #fff;">$sim% MATCH</span>
+                    <span class="clone-type-badge">$c->{clone_type}</span>
+                    <span class="clone-files-text">
+                        <strong>$file_a_base</strong> (L$c->{line_a_start}-L$c->{line_a_end})
+                        <span class="clone-arrow">⟷</span>
+                        <strong>$file_b_base</strong> (L$c->{line_b_start}-L$c->{line_b_end})
+                    </span>
+                </div>
+                <button class="diff-toggle-btn" onclick="toggleCloneSnippet($c_idx, this)">Compare Snippets</button>
+            </div>
+            <div class="clone-diff-viewer hidden" id="cloneDiff$c_idx">
+                <div class="diff-side">
+                    <div class="diff-file-label">$c->{file_a} (Lines $c->{line_a_start}–$c->{line_a_end})</div>
+                    <pre class="diff-code"><code>$snippet_a_esc</code></pre>
+                </div>
+                <div class="diff-side">
+                    <div class="diff-file-label">$c->{file_b} (Lines $c->{line_b_start}–$c->{line_b_end})</div>
+                    <pre class="diff-code"><code>$snippet_b_esc</code></pre>
+                </div>
+            </div>
+        </div>
+HTML
+    }
+    if (!@$clone_list) {
+        $clones_html = '<div class="no-findings-msg">✅ 100% ORIGINAL! No code clones or duplicate fragments detected across files.</div>';
+    }
+
     my $html = <<"HTML";
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Security Audit Report | $metadata->{target_path}</title>
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <title>Security & Quality Audit Report | $metadata->{target_path}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700;800;900&family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #f8fafc;
-            --surface: #ffffff;
-            --surface-hover: #f1f5f9;
-            --text-main: #0f172a;
-            --text-muted: #64748b;
-            --border: #e2e8f0;
-            --critical: #ef4444;       --critical-bg: rgba(239, 68, 68, 0.1);
-            --high: #f97316;           --high-bg: rgba(249, 115, 22, 0.1);
-            --moderate: #eab308;       --moderate-bg: rgba(234, 179, 8, 0.1);
-            --low: #10b981;            --low-bg: rgba(16, 185, 129, 0.1);
-            --cyan: #0ea5e9;           --cyan-bg: rgba(14, 165, 233, 0.1);
+            --bg-page: #f4f4f5;
+            --bg-card: #ffffff;
+            --border-color: #000000;
+            --shadow-color: rgba(0, 0, 0, 1);
+            --text-primary: #000000;
+            --text-secondary: #52525b;
+            --dot-color: #000000;
+            --card-hover-bg: #fafafa;
+            --snippet-bg: #09090b;
+            --snippet-text: #f4f4f5;
+            --critical: #ef4444;
+            --high: #f97316;
+            --medium: #eab308;
+            --low: #22c55e;
+            --accent: #a78bfa;
+            --cyan: #06b6d4;
         }
+
+        body.dark {
+            --bg-page: #09090b;
+            --bg-card: #18181b;
+            --border-color: #ffffff;
+            --shadow-color: rgba(255, 255, 255, 1);
+            --text-primary: #ffffff;
+            --text-secondary: #a1a1aa;
+            --dot-color: #ffffff;
+            --card-hover-bg: #27272a;
+            --snippet-bg: #000000;
+            --snippet-text: #e4e4e7;
+        }
+
+        * { box-sizing: border-box; }
         
-        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg-color); color: var(--text-main); margin: 0; padding: 40px 20px; line-height: 1.6; }
-        .container { max-width: 1400px; margin: auto; }
-        
-        /* Header */
-        .header-section { background: var(--surface); padding: 36px; border-radius: 16px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01); }
-        h1 { margin: 0 0 12px 0; font-size: 2.2rem; font-weight: 800; display: flex; align-items: center; gap: 16px; color: #1e293b; letter-spacing: -0.02em; }
-        .title-badge { background: var(--cyan); color: white; padding: 6px 12px; border-radius: 8px; font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3); }
-        .metadata-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; font-size: 0.95rem; color: var(--text-muted); background: var(--bg-color); padding: 20px; border-radius: 12px; border: 1px solid var(--border); }
-        .metadata-item span { font-weight: 700; color: var(--text-main); display: block; margin-top: 6px; font-size: 1.05rem; }
-        
-        /* Analytics Layout */
-        .analytics-grid { display: grid; grid-template-columns: 1fr 3fr; gap: 32px; margin-bottom: 32px; }
-        
-        /* Summary Dashboard */
-        .dashboard-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 32px 24px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
-        .dashboard-panel h2 { font-size: 1.25rem; font-weight: 700; color: #1e293b; margin-top: 0; margin-bottom: 24px; border-bottom: 2px solid var(--border); padding-bottom: 12px; }
-        
-        .score-display { text-align: center; margin-bottom: 40px; }
-        .score-value { font-size: 4.5rem; font-weight: 900; line-height: 1; margin: 16px 0; letter-spacing: -0.03em; }
-        .cat-critical { color: var(--critical); }
-        .cat-moderate { color: var(--moderate); }
-        .cat-low { color: var(--low); }
-        
-        /* Stats Grid */
-        .stats-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
-        .stat-card { display: flex; justify-content: space-between; align-items: center; padding: 20px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-        .stat-card:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,0.06); }
-        .stat-card.active { border-color: var(--cyan); box-shadow: 0 0 0 2px var(--cyan); background: var(--cyan-bg); }
-        .card-label { font-size: 0.95rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-        .card-value { font-size: 1.75rem; font-weight: 800; }
-        
-        .stat-high { border-left: 5px solid var(--critical); }
-        .stat-high .card-value { color: var(--critical); }
-        
-        .stat-medium { border-left: 5px solid var(--high); }
-        .stat-medium .card-value { color: var(--high); }
-        
-        .stat-low { border-left: 5px solid var(--low); }
-        .stat-low .card-value { color: var(--low); }
-        
-        /* Chart container */
-        .charts-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
-        .chart-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); display: flex; flex-direction: column; transition: transform 0.3s ease; }
-        .chart-box:hover { transform: translateY(-4px); }
-        .chart-box h3 { font-size: 1.05rem; color: #1e293b; margin: 0 0 20px 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-        .chart-wrapper { position: relative; height: 260px; width: 100%; flex-grow: 1; display:flex; justify-content:center; align-items:center; }
-        
-        /* Table */
-        .table-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 32px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
-        .table-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-        .table-controls h2 { font-size: 1.5rem; font-weight: 800; margin: 0; color: #1e293b; }
-        #filter-status { font-size: 0.95rem; font-weight: 600; color: var(--cyan); background: var(--cyan-bg); border: 1px solid rgba(14, 165, 233, 0.3); padding: 10px 20px; border-radius: 24px; display: none; }
-        .btn-clear { background: white; border: 1px solid var(--border); color: var(--text-main); padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: none; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.02);}
-        .btn-clear:hover { background: var(--surface-hover); color: var(--critical); border-color: rgba(239, 68, 68, 0.3); }
-        
-        table { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-        th, td { padding: 20px 24px; text-align: left; }
-        th { background: var(--bg-color); color: var(--text-muted); font-weight: 700; text-transform: uppercase; font-size: 0.85rem; letter-spacing: 0.5px; border-bottom: 2px solid var(--border); }
-        tr { border-bottom: 1px solid var(--border); background: var(--surface); transition: background 0.2s ease; }
-        tr:last-child { border-bottom: none; }
-        tr:hover { background: var(--surface-hover); }
-        td { border-bottom: 1px solid var(--border); font-size: 0.95rem; }
-        
-        /* Badges & Code */
-        .rule-badge { background: var(--bg-color); padding: 6px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.85em; font-weight: 700; color: #475569; border: 1px solid var(--border); }
-        .sev-high { color: var(--critical); background-color: var(--critical-bg); padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 0.85em; display: inline-block; border: 1px solid rgba(239,68,68,0.2); }
-        .sev-medium { color: var(--high); background-color: var(--high-bg); padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 0.85em; display: inline-block; border: 1px solid rgba(249,115,22,0.2); }
-        .sev-low { color: var(--low); background-color: var(--low-bg); padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 0.85em; display: inline-block; border: 1px solid rgba(16,185,129,0.2); }
-        
-        code { background: var(--bg-color); border: 1px solid var(--border); padding: 12px 16px; border-radius: 8px; color: #334155; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; word-break: break-all; display: block; max-width: 450px; white-space: pre-wrap; line-height: 1.5; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
-        
-        .footer { margin-top: 48px; text-align: center; color: var(--text-muted); font-size: 0.9em; font-weight: 500; }
+        body {
+            margin: 0;
+            padding: 32px 16px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-page);
+            color: var(--text-primary);
+            background-image: radial-gradient(var(--dot-color) 1px, transparent 1px);
+            background-size: 24px 24px;
+            background-opacity: 0.05;
+            transition: background-color 0.2s, color 0.2s;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1440px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* HEADER SECTION */
+        .header-card {
+            background-color: var(--bg-card);
+            border: 3px solid var(--border-color);
+            box-shadow: 8px 8px 0px 0px var(--shadow-color);
+            padding: 28px 32px;
+            margin-bottom: 28px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 24px;
+            transition: all 0.2s;
+        }
+
+        .header-title-area h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(2rem, 4vw, 3.2rem);
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: -0.04em;
+            margin: 0 0 6px 0;
+            line-height: 1;
+        }
+
+        .header-subtitle {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .meta-pill {
+            background: var(--bg-card);
+            border: 2px solid var(--border-color);
+            padding: 8px 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 700;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 3px 3px 0 0 var(--shadow-color);
+        }
+
+        .meta-pill .label {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .meta-pill .val {
+            font-size: 1.1rem;
+            font-weight: 900;
+        }
+
+        .theme-btn {
+            background: var(--bg-card);
+            border: 3px solid var(--border-color);
+            box-shadow: 4px 4px 0px 0px var(--shadow-color);
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 900;
+            padding: 10px 18px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        .theme-btn:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 6px 6px 0px 0px var(--shadow-color);
+        }
+
+        .theme-btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0px 0px var(--shadow-color);
+        }
+
+        /* BENTO GRID */
+        .bento-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+            margin-bottom: 28px;
+        }
+
+        \@media (min-width: 1024px) {
+            .bento-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .bento-col {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .bento-card {
+            background-color: var(--bg-card);
+            border: 3px solid var(--border-color);
+            box-shadow: 8px 8px 0px 0px var(--shadow-color);
+            padding: 24px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 12px;
+        }
+
+        .card-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 800;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-transform: uppercase;
+            letter-spacing: -0.02em;
+        }
+
+        .card-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            font-weight: 800;
+            padding: 4px 8px;
+            border: 2px solid var(--border-color);
+            background: var(--bg-page);
+            box-shadow: 2px 2px 0 0 var(--shadow-color);
+        }
+
+        /* BAR CHART */
+        .bar-chart-container {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            height: 220px;
+            padding: 10px 0;
+            border-bottom: 2px solid var(--border-color);
+            gap: 12px;
+        }
+
+        .bar-col {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+            justify-content: flex-end;
+            position: relative;
+        }
+
+        .bar-fill {
+            width: 100%;
+            max-width: 50px;
+            border: 3px solid var(--border-color);
+            border-bottom: none;
+            position: relative;
+            transition: height 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 2px;
+            cursor: pointer;
+        }
+
+        .bar-count {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            font-weight: 900;
+            color: #000;
+        }
+
+        .bar-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 800;
+            color: #000;
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+        }
+
+        .bar-tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-card);
+            border: 2px solid var(--border-color);
+            padding: 4px 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            font-weight: 800;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s, transform 0.15s;
+            box-shadow: 4px 4px 0 0 var(--shadow-color);
+            z-index: 20;
+        }
+
+        .bar-col:hover .bar-tooltip {
+            opacity: 1;
+            transform: translateX(-50%) translateY(-4px);
+        }
+
+        .no-findings-msg {
+            width: 100%;
+            text-align: center;
+            padding: 40px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 1.1rem;
+            border: 2px dashed var(--border-color);
+        }
+
+        /* RADAR CHART */
+        .radar-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            flex: 1;
+        }
+
+        \@media (min-width: 640px) {
+            .radar-layout {
+                flex-direction: row;
+                align-items: center;
+            }
+        }
+
+        .radar-svg-box {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            min-height: 220px;
+        }
+
+        .radar-watermark {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 4rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            opacity: 0.05;
+            pointer-events: none;
+            letter-spacing: -0.05em;
+        }
+
+        .radar-stats-list {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        \@media (min-width: 640px) {
+            .radar-stats-list {
+                width: 200px;
+            }
+        }
+
+        .radar-stat-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 5px 8px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--bg-page);
+        }
+
+        .radar-stat-item:hover, .radar-stat-item.active {
+            border-color: var(--border-color);
+            transform: translateX(4px);
+            box-shadow: 3px 3px 0 0 var(--shadow-color);
+            background: var(--bg-card);
+        }
+
+        .radar-stat-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            font-weight: 800;
+        }
+
+        .swatch {
+            width: 10px;
+            height: 10px;
+            border: 2px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .radar-stat-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 900;
+            font-size: 0.82rem;
+        }
+
+        /* DONUT CHART */
+        .donut-wrapper {
+            position: relative;
+            width: 240px;
+            height: 240px;
+            margin: 10px auto;
+        }
+
+        \@media (min-width: 1200px) {
+            .donut-wrapper {
+                width: 260px;
+                height: 260px;
+            }
+        }
+
+        .donut-center-readout {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            text-align: center;
+        }
+
+        .donut-readout-val {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2.6rem;
+            font-weight: 900;
+            line-height: 1;
+            margin-bottom: 2px;
+        }
+
+        .donut-readout-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .donut-legend-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            width: 100%;
+            margin-top: 12px;
+        }
+
+        .legend-card {
+            background: var(--bg-page);
+            border: 2px solid var(--border-color);
+            padding: 6px 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 2px 2px 0 0 var(--shadow-color);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .legend-card:hover, .legend-card.active {
+            transform: translate(-2px, -2px);
+            box-shadow: 4px 4px 0 0 var(--shadow-color);
+            background: var(--bg-card);
+        }
+
+        .legend-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            font-weight: 800;
+        }
+
+        .legend-count {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            font-weight: 900;
+        }
+
+        /* PLAGIARISM SECTION */
+        .plagiarism-panel {
+            background-color: var(--bg-card);
+            border: 3px solid var(--border-color);
+            box-shadow: 8px 8px 0px 0px var(--shadow-color);
+            padding: 24px;
+            margin-bottom: 28px;
+        }
+
+        .clone-card {
+            background: var(--bg-page);
+            border: 2px solid var(--border-color);
+            padding: 14px 18px;
+            margin-bottom: 12px;
+            box-shadow: 3px 3px 0 0 var(--shadow-color);
+            transition: all 0.15s;
+        }
+
+        .clone-card:hover {
+            box-shadow: 5px 5px 0 0 var(--shadow-color);
+        }
+
+        .clone-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .clone-title-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .clone-sim-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 900;
+            font-size: 0.8rem;
+            padding: 3px 8px;
+            border: 2px solid var(--border-color);
+            box-shadow: 2px 2px 0 0 var(--shadow-color);
+        }
+
+        .clone-type-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 0.75rem;
+            padding: 3px 8px;
+            background: var(--bg-card);
+            border: 2px solid var(--border-color);
+        }
+
+        .clone-files-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+        }
+
+        .clone-arrow {
+            color: var(--accent);
+            font-weight: 900;
+            padding: 0 4px;
+        }
+
+        .diff-toggle-btn {
+            background: var(--bg-card);
+            border: 2px solid var(--border-color);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            font-weight: 800;
+            padding: 6px 12px;
+            cursor: pointer;
+            box-shadow: 2px 2px 0 0 var(--shadow-color);
+            text-transform: uppercase;
+        }
+
+        .diff-toggle-btn:hover {
+            background: var(--text-primary);
+            color: var(--bg-card);
+        }
+
+        .clone-diff-viewer {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 2px dashed var(--border-color);
+        }
+
+        \@media (min-width: 768px) {
+            .clone-diff-viewer {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .diff-side {
+            background: var(--snippet-bg);
+            color: var(--snippet-text);
+            border: 2px solid var(--border-color);
+            padding: 12px;
+            border-radius: 2px;
+        }
+
+        .diff-file-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #a1a1aa;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #3f3f46;
+            padding-bottom: 4px;
+        }
+
+        .diff-code {
+            margin: 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            line-height: 1.4;
+        }
+
+        /* TABLE SECTION */
+        .table-panel {
+            background-color: var(--bg-card);
+            border: 3px solid var(--border-color);
+            box-shadow: 8px 8px 0px 0px var(--shadow-color);
+            padding: 24px;
+            margin-bottom: 28px;
+        }
+
+        .table-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            background: var(--bg-page);
+            border: 2px solid var(--border-color);
+            padding: 6px 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 2px 2px 0 0 var(--shadow-color);
+            transition: all 0.15s;
+            text-transform: uppercase;
+        }
+
+        .filter-btn:hover, .filter-btn.active {
+            background: var(--text-primary);
+            color: var(--bg-card);
+            transform: translate(-1px, -1px);
+            box-shadow: 3px 3px 0 0 var(--shadow-color);
+        }
+
+        .search-input {
+            background: var(--bg-page);
+            border: 2px solid var(--border-color);
+            padding: 8px 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            box-shadow: 3px 3px 0 0 var(--shadow-color);
+            outline: none;
+            width: 240px;
+            transition: width 0.2s;
+        }
+
+        .search-input:focus {
+            width: 300px;
+            border-color: var(--accent);
+        }
+
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.85rem;
+        }
+
+        th {
+            background: var(--bg-page);
+            border: 2px solid var(--border-color);
+            padding: 10px 12px;
+            text-align: left;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            border: 2px solid var(--border-color);
+            padding: 10px 12px;
+            vertical-align: middle;
+        }
+
+        tr.vuln-row:hover td {
+            background: var(--card-hover-bg);
+        }
+
+        .file-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 800;
+            display: block;
+        }
+
+        .line-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
+        .rule-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 800;
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            background: var(--bg-page);
+            border: 2px solid var(--border-color);
+            display: inline-block;
+        }
+
+        .cwe-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 0.65rem;
+            padding: 2px 4px;
+            background: var(--accent);
+            color: #000;
+            border: 1px solid var(--border-color);
+            margin-left: 4px;
+            display: inline-block;
+        }
+
+        .type-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 900;
+            font-size: 0.7rem;
+            padding: 3px 6px;
+            border: 2px solid var(--border-color);
+            box-shadow: 2px 2px 0 0 var(--shadow-color);
+            text-transform: uppercase;
+            display: inline-block;
+        }
+
+        .type-vulnerability { background: #fee2e2; color: #991b1b; }
+        .type-error         { background: #fef3c7; color: #92400e; }
+        .type-malware       { background: #fce7f3; color: #9d174d; }
+        .type-secret        { background: #ede9fe; color: #5b21b6; }
+
+        .sev-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 900;
+            font-size: 0.75rem;
+            padding: 3px 8px;
+            border: 2px solid var(--border-color);
+            box-shadow: 2px 2px 0 0 var(--shadow-color);
+            text-transform: uppercase;
+            display: inline-block;
+        }
+
+        .sev-critical { background: var(--critical); color: #fff; }
+        .sev-high     { background: var(--high); color: #fff; }
+        .sev-medium   { background: var(--medium); color: #000; }
+        .sev-low      { background: var(--low); color: #000; }
+
+        td.col-code code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            background: var(--snippet-bg);
+            color: var(--snippet-text);
+            padding: 4px 8px;
+            border-radius: 2px;
+            display: block;
+            max-width: 320px;
+            overflow-x: auto;
+            white-space: pre;
+        }
+
+        .fix-box {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--low);
+            background: rgba(34, 197, 94, 0.1);
+            border-left: 3px solid var(--low);
+            padding: 4px 8px;
+        }
+
+        .footer {
+            text-align: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            padding: 20px 0;
+            letter-spacing: 0.05em;
+        }
+
         .hidden { display: none !important; }
     </style>
 </head>
 <body>
     <div class="container">
-        
-        <div class="header-section">
-            <div>
-                <h1>Perl Security Analyzer <span class="title-badge">$metadata->{language}</span></h1>
-                <p style="color: var(--text-muted); margin: 0;">Advanced Static Code Analysis Output</p>
+        <!-- HEADER -->
+        <header class="header-card">
+            <div class="header-title-area">
+                <div style="display:flex; align-items:center; gap: 10px; margin-bottom: 6px;">
+                    <span class="card-badge" style="background: var(--critical); color: #fff;">SECURITY &amp; QUALITY AUDIT</span>
+                    <span class="header-subtitle">$metadata->{timestamp}</span>
+                </div>
+                <h1>Code Analyzer</h1>
+                <div class="header-subtitle" style="display:flex; align-items:center; gap: 8px; margin-top: 4px;">
+                    <span>TARGET:</span>
+                    <span style="border-bottom: 2px solid var(--border-color); color: var(--text-primary);">$metadata->{target_path}</span>
+                </div>
             </div>
-            
-            <div class="metadata-grid">
-                <div class="metadata-item">Target Context<span>$metadata->{target_path}</span></div>
-                <div class="metadata-item">Files Processed<span>$metadata->{files_scanned}</span></div>
-                <div class="metadata-item">Lines of Code<span>$metadata->{total_loc}</span></div>
-                <div class="metadata-item">Scan Duration<span>$metadata->{duration_secs}s</span></div>
-                <div class="metadata-item" style="grid-column: span 2;">Analysis Timestamp<span>$metadata->{timestamp}</span></div>
+
+            <div class="header-controls">
+                <div class="meta-pill">
+                    <span class="label">Files</span>
+                    <span class="val">$metadata->{files_scanned}</span>
+                </div>
+                <div class="meta-pill">
+                    <span class="label">LOC</span>
+                    <span class="val">$metadata->{total_loc}</span>
+                </div>
+                <div class="meta-pill">
+                    <span class="label">Vulns</span>
+                    <span class="val" style="color: var(--critical);">$type_counts{vulnerability}</span>
+                </div>
+                <div class="meta-pill">
+                    <span class="label">Code Errors</span>
+                    <span class="val" style="color: var(--high);">$type_counts{error}</span>
+                </div>
+                <div class="meta-pill">
+                    <span class="label">Max Plagiarism</span>
+                    <span class="val" style="color: var(--accent);">$highest_plagiarism%</span>
+                </div>
+                <div class="meta-pill">
+                    <span class="label">Quality</span>
+                    <span class="val">$quality_grade ($quality_score%)</span>
+                </div>
+                <div class="meta-pill" style="border-color: var(--critical); color: var(--critical);">
+                    <span class="label">Risk Category</span>
+                    <span class="val">$category</span>
+                </div>
+                <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()">Mode: Dark</button>
             </div>
-        </div>
-        
-        <div class="analytics-grid">
-            <!-- Left Panel: Summary Stats -->
-            <div class="dashboard-panel">
-                <h2>Threat Assessment</h2>
-                <div class="score-display">
-                    <div style="font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase;">Total Risk Score</div>
-                    <div class="score-value cat-$cat_class">$score</div>
-                    <div style="font-size: 0.95rem; font-weight: 600; text-transform: uppercase;" class="cat-$cat_class">$category RISK</div>
-                </div>
-                
-                <div class="stats-grid">
-                    <div class="stat-card stat-high" onclick="filterTable('high', this)">
-                        <div class="card-label">High</div>
-                        <div class="card-value">$counts{HIGH}</div>
+        </header>
+
+        <!-- MAIN BENTO GRID -->
+        <div class="bento-grid">
+            <!-- COLUMN 1: TOP RULES + SECURITY RADAR -->
+            <div class="bento-col">
+                <!-- CARD 1: TOP RULES (BRUTALIST BAR CHART) -->
+                <div class="bento-card" style="min-height: 380px;">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <span>🔥</span> Top Violated Rules
+                        </h2>
+                        <span class="card-badge">Rule Hits</span>
                     </div>
-                    <div class="stat-card stat-medium" onclick="filterTable('medium', this)">
-                        <div class="card-label">Medium</div>
-                        <div class="card-value">$counts{MEDIUM}</div>
-                    </div>
-                    <div class="stat-card stat-low" onclick="filterTable('low', this)">
-                        <div class="card-label">Low</div>
-                        <div class="card-value">$counts{LOW}</div>
+                    <div class="bar-chart-container">
+                        $bar_items_html
                     </div>
                 </div>
-                <div style="text-align:center; font-size: 0.8rem; color: var(--text-muted); margin-top: 16px;">Click to filter findings</div>
+
+                <!-- CARD 2: SECURITY & CODE POSTURE (BRUTALIST RADAR CHART) -->
+                <div class="bento-card" style="min-height: 380px;">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <span>⚡</span> Defense &amp; Quality Posture
+                        </h2>
+                        <span class="card-badge">Health Metrics</span>
+                    </div>
+                    <div class="radar-layout">
+                        <div class="radar-svg-box">
+                            <div class="radar-watermark">AUDIT</div>
+                            <svg id="radarSvg" viewBox="0 0 240 240" style="width: 100%; height: 100%; max-width: 250px; overflow: visible;"></svg>
+                        </div>
+                        <div class="radar-stats-list" id="radarList">
+                            <!-- Populated via JS -->
+                        </div>
+                    </div>
+                </div>
             </div>
-            
-            <!-- Right Panel: Charts -->
-            <div class="charts-container">
-                <div class="chart-box">
-                    <h3>Severity Distribution</h3>
-                    <div class="chart-wrapper">
-                        <canvas id="severityChart"></canvas>
+
+            <!-- COLUMN 2: FULL HEIGHT THREAT & SEVERITY DONUT -->
+            <div class="bento-col">
+                <div class="bento-card" style="height: 100%; min-height: 520px; justify-content: space-between;">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <span>🛡️</span> Severity &amp; Threat Breakdown
+                        </h2>
+                        <span class="card-badge" style="background: var(--critical); color: #fff;">$total_vulns FINDINGS</span>
                     </div>
-                </div>
-                <div class="chart-box">
-                    <h3>Top Active Rules</h3>
-                    <div class="chart-wrapper">
-                        <canvas id="rulesChart"></canvas>
-                    </div>
-                </div>
-                <div class="chart-box">
-                    <h3>Top Vulnerable Files</h3>
-                    <div class="chart-wrapper">
-                        <canvas id="filesChart"></canvas>
+
+                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;">
+                        <div class="donut-wrapper">
+                            <svg id="donutSvg" viewBox="-1.2 -1.2 2.4 2.4" style="width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible;"></svg>
+                            <div class="donut-center-readout">
+                                <span class="donut-readout-val" id="donutVal">$score</span>
+                                <span class="donut-readout-label" id="donutLabel">TOTAL RISK</span>
+                            </div>
+                        </div>
+
+                        <div class="donut-legend-grid">
+                            <div class="legend-card" data-sev="CRITICAL" onmouseenter="highlightDonut('CRITICAL')" onmouseleave="resetDonut()">
+                                <div class="legend-left">
+                                    <div class="swatch" style="background: var(--critical);"></div>
+                                    <span class="legend-title">Critical</span>
+                                </div>
+                                <span class="legend-count">$counts{CRITICAL}</span>
+                            </div>
+                            <div class="legend-card" data-sev="HIGH" onmouseenter="highlightDonut('HIGH')" onmouseleave="resetDonut()">
+                                <div class="legend-left">
+                                    <div class="swatch" style="background: var(--high);"></div>
+                                    <span class="legend-title">High</span>
+                                </div>
+                                <span class="legend-count">$counts{HIGH}</span>
+                            </div>
+                            <div class="legend-card" data-sev="MEDIUM" onmouseenter="highlightDonut('MEDIUM')" onmouseleave="resetDonut()">
+                                <div class="legend-left">
+                                    <div class="swatch" style="background: var(--medium);"></div>
+                                    <span class="legend-title">Medium</span>
+                                </div>
+                                <span class="legend-count">$counts{MEDIUM}</span>
+                            </div>
+                            <div class="legend-card" data-sev="LOW" onmouseenter="highlightDonut('LOW')" onmouseleave="resetDonut()">
+                                <div class="legend-left">
+                                    <div class="swatch" style="background: var(--low);"></div>
+                                    <span class="legend-title">Low</span>
+                                </div>
+                                <span class="legend-count">$counts{LOW}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="table-panel">
-            <div class="table-controls">
-                <h2>Vulnerability Findings</h2>
-                <div style="display:flex; align-items:center; gap: 16px;">
-                    <div id="filter-status"></div>
-                    <button class="btn-clear" id="btn-clear" onclick="clearFilter()">Clear Filter</button>
+        <!-- 3. PLAGIARISM & CODE CLONES SECTION -->
+        <section class="plagiarism-panel">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <span>🧬</span> Plagiarism &amp; Code Clone Intelligence
+                </h2>
+                <div style="display: flex; gap: 8px;">
+                    <span class="card-badge" style="background: var(--accent); color: #000;">$total_clones Clones Found</span>
+                    <span class="card-badge">Originality: $originality_score%</span>
                 </div>
             </div>
-            
-            <table>
-                <thead>
-                    <tr>
-                        <th style="width: 15%">Location</th>
-                        <th style="width: 10%">Rule ID</th>
-                        <th style="width: 10%">Severity</th>
-                        <th style="width: 25%">Message</th>
-                        <th style="width: 25%">Code Snippet</th>
-                        <th style="width: 15%">Suggested Fix</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    $vuln_rows
-                </tbody>
-            </table>
-        </div>
-        
-        <div class="footer">
-            Generated autonomously by Perl Static Code Security Analyzer
-        </div>
+            <div class="clones-container">
+                $clones_html
+            </div>
+        </section>
+
+        <!-- 4. FINDINGS TABLE -->
+        <section class="table-panel">
+            <div class="table-controls">
+                <div>
+                    <h2 class="card-title" style="font-size: 1.5rem; margin-bottom: 4px;">
+                        <span>📋</span> Audit Findings ($total_vulns)
+                    </h2>
+                    <span class="header-subtitle" id="tableFilterStatus">Showing all records</span>
+                </div>
+
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                    <!-- Category Tabs -->
+                    <div class="filter-group">
+                        <button class="filter-btn active" onclick="filterCategory('all', this)">All ($total_vulns)</button>
+                        <button class="filter-btn" onclick="filterCategory('vulnerability', this)">Vulns ($type_counts{vulnerability})</button>
+                        <button class="filter-btn" onclick="filterCategory('error', this)">Code Errors ($type_counts{error})</button>
+                        <button class="filter-btn" onclick="filterCategory('malware', this)">Malware ($type_counts{malware})</button>
+                        <button class="filter-btn" onclick="filterCategory('secret', this)">Secrets ($type_counts{secret})</button>
+                    </div>
+
+                    <!-- Severity Filter -->
+                    <div class="filter-group">
+                        <button class="filter-btn active" onclick="filterSeverity('all', this)">All Sev</button>
+                        <button class="filter-btn" onclick="filterSeverity('critical', this)">Critical</button>
+                        <button class="filter-btn" onclick="filterSeverity('high', this)">High</button>
+                        <button class="filter-btn" onclick="filterSeverity('medium', this)">Med</button>
+                        <button class="filter-btn" onclick="filterSeverity('low', this)">Low</button>
+                    </div>
+
+                    <input type="text" id="searchInput" class="search-input" placeholder="🔍 Search findings..." oninput="handleSearch()">
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="col-loc">Location</th>
+                            <th class="col-type">Type</th>
+                            <th class="col-rule">Rule &amp; CWE</th>
+                            <th class="col-sev">Severity</th>
+                            <th class="col-msg">Description</th>
+                            <th class="col-code">Code Snippet</th>
+                            <th class="col-fix">Remediation</th>
+                        </tr>
+                    </thead>
+                    <tbody id="vulnTableBody">
+                        $vuln_rows
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <footer class="footer">
+            Generated autonomously by Perl Static Code Security Analyzer • Neo-Brutalist Bento Edition
+        </footer>
     </div>
 
+    <!-- CLIENT INTERACTIVITY & CHARTS SCRIPT -->
     <script>
-        // Data populated from Perl
-        const severityData = [$counts{HIGH}, $counts{MEDIUM}, $counts{LOW}];
-        const ruleLabels = $top_rules_labels;
-        const ruleData = $top_rules_data;
-        const fileLabels = $top_files_labels;
-        const fileData = $top_files_data;
-        
-        // Setup Chart defaults
-        Chart.defaults.color = '#64748b';
-        Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
-        
-        // 1. Severity Doughnut Chart
-        const ctxSev = document.getElementById('severityChart').getContext('2d');
-        new Chart(ctxSev, {
-            type: 'doughnut',
-            data: {
-                labels: ['High', 'Medium', 'Low'],
-                datasets: [{
-                    data: severityData,
-                    backgroundColor: [
-                        '#ef4444', // High
-                        '#f97316', // Medium
-                        '#22c55e'  // Low
-                    ],
-                    borderWidth: 0,
-                    hoverOffset: 4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '70%',
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: { padding: 20, usePointStyle: true, boxWidth: 8 }
-                    },
-                    tooltip: {
-                        backgroundColor: '#ffffff',
-                        titleColor: '#0f172a',
-                        bodyColor: '#475569',
-                        borderColor: '#e2e8f0',
-                        borderWidth: 1,
-                        padding: 12,
-                        boxPadding: 6,
-                        usePointStyle: true,
-                    }
-                }
+        // 1. DATA FROM PERL
+        const RADAR_DATA = [
+            { label: "INJECTION", value: $posture_injection, color: "#f87171" },
+            { label: "EXFILTRATION", value: $posture_exfiltration, color: "#fb923c" },
+            { label: "PERSISTENCE", value: $posture_persistence, color: "#fbbf24" },
+            { label: "ISOLATION", value: $posture_isolation, color: "#a78bfa" },
+            { label: "QUALITY", value: $quality_score, color: "#38bdf8" },
+            { label: "ORIGINALITY", value: $originality_score, color: "#4ade80" }
+        ];
+
+        const SEV_DATA = [
+            { label: "CRITICAL", count: $counts{CRITICAL}, color: "#ef4444" },
+            { label: "HIGH", count: $counts{HIGH}, color: "#f97316" },
+            { label: "MEDIUM", count: $counts{MEDIUM}, color: "#eab308" },
+            { label: "LOW", count: $counts{LOW}, color: "#22c55e" }
+        ];
+
+        const TOTAL_VULNS = $total_vulns;
+        const TOTAL_SCORE = $score;
+
+        // 2. THEME HANDLING
+        function initTheme() {
+            const saved = localStorage.getItem('pca_theme') || 'dark';
+            if (saved === 'dark') {
+                document.body.classList.add('dark');
+                document.getElementById('themeToggleBtn').innerText = 'Mode: Light';
+            } else {
+                document.body.classList.remove('dark');
+                document.getElementById('themeToggleBtn').innerText = 'Mode: Dark';
             }
-        });
+        }
 
-        // 2. Top Rules Bar Chart
-        const ctxRules = document.getElementById('rulesChart').getContext('2d');
-        new Chart(ctxRules, {
-            type: 'bar',
-            data: {
-                labels: ruleLabels,
-                datasets: [{
-                    label: 'Occurrences',
-                    data: ruleData,
-                    backgroundColor: '#0ea5e9',
-                    borderRadius: 4,
-                    barThickness: 'flex',
-                    maxBarThickness: 40
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        backgroundColor: '#ffffff',
-                        titleColor: '#0f172a',
-                        bodyColor: '#475569',
-                        borderColor: '#e2e8f0',
-                        borderWidth: 1,
-                        padding: 12
-                    }
-                },
-                scales: {
-                    x: {
-                        grid: { display: false, drawBorder: false },
-                        ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 }, color: '#64748b' }
-                    },
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: 'rgba(0, 0, 0, 0.05)', drawBorder: false },
-                        ticks: { stepSize: 1, precision: 0, color: '#64748b' }
-                    }
+        function toggleTheme() {
+            document.body.classList.toggle('dark');
+            const isDark = document.body.classList.contains('dark');
+            localStorage.setItem('pca_theme', isDark ? 'dark' : 'light');
+            document.getElementById('themeToggleBtn').innerText = isDark ? 'Mode: Light' : 'Mode: Dark';
+            renderRadar();
+            renderDonut();
+        }
+
+        // 3. RADAR CHART
+        const RADAR_SIZE = 240;
+        const RADAR_CENTER = RADAR_SIZE / 2;
+        const RADAR_RADIUS = 90;
+        let activeRadarMetric = null;
+
+        function angleToRad(angle) {
+            return (Math.PI / 180) * angle;
+        }
+
+        function getRadarCoords(val, idx, total) {
+            const angle = angleToRad((360 / total) * idx - 90);
+            const r = (val / 100) * RADAR_RADIUS;
+            return {
+                x: RADAR_CENTER + r * Math.cos(angle),
+                y: RADAR_CENTER + r * Math.sin(angle)
+            };
+        }
+
+        function renderRadar() {
+            const svg = document.getElementById('radarSvg');
+            const list = document.getElementById('radarList');
+            if (!svg || !list) return;
+
+            const isDark = document.body.classList.contains('dark');
+            const strokeColor = isDark ? '#ffffff' : '#000000';
+            const gridColor = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)';
+            const total = RADAR_DATA.length;
+
+            let svgContent = '';
+
+            // Grid Levels (100, 75, 50, 25)
+            [100, 75, 50, 25].forEach(level => {
+                let path = '';
+                for (let i = 0; i < total; i++) {
+                    const c = getRadarCoords(level, i, total);
+                    path += (i === 0 ? 'M ' : 'L ') + c.x + ' ' + c.y + ' ';
                 }
+                path += 'Z';
+                svgContent += '<path d="' + path + '" fill="none" stroke="' + gridColor + '" stroke-width="2" stroke-dasharray="4 4" />';
+            });
+
+            // Axes lines
+            for (let i = 0; i < total; i++) {
+                const outer = getRadarCoords(100, i, total);
+                svgContent += '<line x1="' + RADAR_CENTER + '" y1="' + RADAR_CENTER + '" x2="' + outer.x + '" y2="' + outer.y + '" stroke="' + gridColor + '" stroke-width="2" />';
             }
-        });
 
-        // 3. Top Files Bar Chart
-        const ctxFiles = document.getElementById('filesChart').getContext('2d');
-        new Chart(ctxFiles, {
-            type: 'bar',
-            data: {
-                labels: fileLabels,
-                datasets: [{
-                    label: 'Vulnerabilities',
-                    data: fileData,
-                    backgroundColor: '#eab308',
-                    borderRadius: 4,
-                    barThickness: 'flex',
-                    maxBarThickness: 40
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        backgroundColor: '#ffffff',
-                        titleColor: '#0f172a',
-                        bodyColor: '#475569',
-                        borderColor: '#e2e8f0',
-                        borderWidth: 1,
-                        padding: 12
-                    }
-                },
-                scales: {
-                    x: {
-                        grid: { display: false, drawBorder: false },
-                        ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 }, color: '#64748b' }
-                    },
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: 'rgba(0, 0, 0, 0.05)', drawBorder: false },
-                        ticks: { stepSize: 1, precision: 0, color: '#64748b' }
-                    }
-                }
+            // Data Polygon
+            let polyPath = '';
+            for (let i = 0; i < total; i++) {
+                const c = getRadarCoords(RADAR_DATA[i].value, i, total);
+                polyPath += (i === 0 ? 'M ' : 'L ') + c.x + ' ' + c.y + ' ';
             }
-        });
+            polyPath += 'Z';
+            svgContent += '<path d="' + polyPath + '" fill="rgba(167, 139, 250, 0.45)" stroke="' + strokeColor + '" stroke-width="3.5" stroke-linejoin="round" />';
 
-        // Filtering logic
-        function filterTable(severity, cardElement) {
-            document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
-            cardElement.classList.add('active');
-            
-            document.getElementById('filter-status').style.display = 'block';
-            document.getElementById('filter-status').innerHTML = 'Filtering by: <strong>' + severity.toUpperCase() + '</strong>';
-            document.getElementById('btn-clear').style.display = 'block';
+            // Interactive points
+            for (let i = 0; i < total; i++) {
+                const item = RADAR_DATA[i];
+                const c = getRadarCoords(item.value, i, total);
+                const isHovered = activeRadarMetric === item.label;
+                const r = isHovered ? 9 : 5.5;
+                const fillColor = isHovered ? item.color : (isDark ? '#18181b' : '#ffffff');
+                
+                svgContent += '<g class="radar-dot-group" data-label="' + item.label + '" onmouseenter="hoverRadar(this.dataset.label)" onmouseleave="hoverRadar(null)" style="cursor: pointer;">';
+                svgContent += '<circle cx="' + c.x + '" cy="' + c.y + '" r="18" fill="transparent" />';
+                svgContent += '<circle cx="' + c.x + '" cy="' + c.y + '" r="' + r + '" fill="' + fillColor + '" stroke="' + strokeColor + '" stroke-width="3" style="transition: all 0.2s;" />';
+                svgContent += '</g>';
+            }
 
+            svg.innerHTML = svgContent;
+
+            // Render stats list
+            let listContent = '';
+            RADAR_DATA.forEach(d => {
+                const isActive = activeRadarMetric === d.label;
+                listContent += '<div class="radar-stat-item ' + (isActive ? 'active' : '') + '" data-label="' + d.label + '" onmouseenter="hoverRadar(this.dataset.label)" onmouseleave="hoverRadar(null)">';
+                listContent += '  <div class="radar-stat-label">';
+                listContent += '    <div class="swatch" style="background-color: ' + d.color + ';"></div>';
+                listContent += '    <span>' + d.label + '</span>';
+                listContent += '  </div>';
+                listContent += '  <span class="radar-stat-val">' + d.value + '%</span>';
+                listContent += '</div>';
+            });
+            list.innerHTML = listContent;
+        }
+
+        function hoverRadar(label) {
+            activeRadarMetric = label;
+            renderRadar();
+        }
+
+        // 4. DONUT CHART
+        let activeDonutSev = null;
+
+        function getPieCoords(percent) {
+            const x = Math.cos(2 * Math.PI * percent);
+            const y = Math.sin(2 * Math.PI * percent);
+            return [x, y];
+        }
+
+        function renderDonut() {
+            const svg = document.getElementById('donutSvg');
+            if (!svg) return;
+
+            const isDark = document.body.classList.contains('dark');
+            const strokeColor = isDark ? '#ffffff' : '#000000';
+
+            const activeSlices = SEV_DATA.filter(s => s.count > 0);
+            const totalCount = activeSlices.reduce((acc, s) => acc + s.count, 0);
+
+            let svgContent = '';
+            let cumulativePercent = 0;
+
+            if (totalCount === 0) {
+                svgContent += '<circle cx="0" cy="0" r="1" fill="#22c55e" stroke="' + strokeColor + '" stroke-width="0.04" />';
+            } else {
+                activeSlices.forEach(slice => {
+                    const slicePercent = slice.count / totalCount;
+                    const startPercent = cumulativePercent;
+                    const endPercent = cumulativePercent + slicePercent;
+                    cumulativePercent = endPercent;
+
+                    const [startX, startY] = getPieCoords(startPercent);
+                    const [endX, endY] = getPieCoords(endPercent);
+                    const largeArcFlag = slicePercent > 0.5 ? 1 : 0;
+
+                    const isHovered = activeDonutSev === slice.label;
+                    const isDimmed = activeDonutSev !== null && !isHovered;
+
+                    let pathData = '';
+                    if (slicePercent >= 0.999) {
+                        pathData = 'M 1 0 A 1 1 0 1 1 -1 0 A 1 1 0 1 1 1 0 Z';
+                    } else {
+                        pathData = 'M ' + startX + ' ' + startY + ' A 1 1 0 ' + largeArcFlag + ' 1 ' + endX + ' ' + endY + ' L 0 0 Z';
+                    }
+
+                    const tx = isHovered ? (startX + endX) * 0.08 : 0;
+                    const ty = isHovered ? (startY + endY) * 0.08 : 0;
+                    const scale = isHovered ? 1.05 : 1;
+                    const opacity = isDimmed ? 0.35 : 1;
+
+                    svgContent += '<path d="' + pathData + '" fill="' + slice.color + '" stroke="' + strokeColor + '" stroke-width="0.04" stroke-linejoin="round" ';
+                    svgContent += 'style="cursor: pointer; transform: translate(' + tx + 'px, ' + ty + 'px) scale(' + scale + '); opacity: ' + opacity + '; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s;" ';
+                    svgContent += 'data-sev="' + slice.label + '" onmouseenter="highlightDonut(this.dataset.sev)" onmouseleave="resetDonut()" />';
+                });
+            }
+
+            const innerFill = isDark ? '#18181b' : '#ffffff';
+            svgContent += '<circle cx="0" cy="0" r="0.56" fill="' + innerFill + '" stroke="' + strokeColor + '" stroke-width="0.04" />';
+
+            svg.innerHTML = svgContent;
+        }
+
+        function highlightDonut(sev) {
+            activeDonutSev = sev;
+            const item = SEV_DATA.find(s => s.label === sev);
+            const valEl = document.getElementById('donutVal');
+            const labelEl = document.getElementById('donutLabel');
+            if (item && valEl && labelEl) {
+                const pct = TOTAL_VULNS > 0 ? Math.round((item.count / TOTAL_VULNS) * 100) : 0;
+                valEl.innerText = item.count;
+                valEl.style.color = item.color;
+                labelEl.innerText = sev + ' (' + pct + '%)';
+            }
+            document.querySelectorAll('.legend-card').forEach(c => {
+                c.classList.toggle('active', c.getAttribute('data-sev') === sev);
+            });
+            renderDonut();
+        }
+
+        function resetDonut() {
+            activeDonutSev = null;
+            const valEl = document.getElementById('donutVal');
+            const labelEl = document.getElementById('donutLabel');
+            if (valEl && labelEl) {
+                valEl.innerText = TOTAL_SCORE;
+                valEl.style.color = '';
+                labelEl.innerText = 'TOTAL RISK';
+            }
+            document.querySelectorAll('.legend-card').forEach(c => c.classList.remove('active'));
+            renderDonut();
+        }
+
+        // 5. PLAGIARISM SNIPPET TOGGLE
+        function toggleCloneSnippet(idx, btn) {
+            const viewer = document.getElementById('cloneDiff' + idx);
+            if (!viewer) return;
+            const isHidden = viewer.classList.contains('hidden');
+            if (isHidden) {
+                viewer.classList.remove('hidden');
+                btn.innerText = 'Hide Snippets';
+            } else {
+                viewer.classList.add('hidden');
+                btn.innerText = 'Compare Snippets';
+            }
+        }
+
+        // 6. TABLE FILTERING & SEARCH
+        let currentSeverityFilter = 'all';
+        let currentCategoryFilter = 'all';
+
+        function filterCategory(cat, btn) {
+            currentCategoryFilter = cat;
+            const group = btn.closest('.filter-group');
+            if (group) {
+                group.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            }
+            updateFilterStatus();
+            applyFilters();
+        }
+
+        function filterSeverity(sev, btn) {
+            currentSeverityFilter = sev;
+            const group = btn.closest('.filter-group');
+            if (group) {
+                group.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            }
+            updateFilterStatus();
+            applyFilters();
+        }
+
+        function updateFilterStatus() {
+            const status = document.getElementById('tableFilterStatus');
+            if (!status) return;
+            const catText = currentCategoryFilter === 'all' ? 'All Types' : currentCategoryFilter.toUpperCase();
+            const sevText = currentSeverityFilter === 'all' ? 'All Severities' : currentSeverityFilter.toUpperCase();
+            status.innerText = 'Filters: ' + catText + ' • ' + sevText;
+        }
+
+        function handleSearch() {
+            applyFilters();
+        }
+
+        function applyFilters() {
+            const query = (document.getElementById('searchInput').value || '').toLowerCase().trim();
             const rows = document.querySelectorAll('.vuln-row');
+
             rows.forEach(row => {
-                if (row.getAttribute('data-severity') === severity) {
+                const sev = row.getAttribute('data-severity');
+                const type = row.getAttribute('data-type');
+                const searchData = (row.getAttribute('data-search') || '').toLowerCase();
+
+                const matchesSev = (currentSeverityFilter === 'all' || sev === currentSeverityFilter);
+                const matchesCat = (currentCategoryFilter === 'all' || type === currentCategoryFilter);
+                const matchesSearch = (!query || searchData.includes(query));
+
+                if (matchesSev && matchesCat && matchesSearch) {
                     row.classList.remove('hidden');
                 } else {
                     row.classList.add('hidden');
                 }
             });
         }
-        
-        function clearFilter() {
-            document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
-            document.getElementById('filter-status').style.display = 'none';
-            document.getElementById('btn-clear').style.display = 'none';
-            
-            const rows = document.querySelectorAll('.vuln-row');
-            rows.forEach(row => row.classList.remove('hidden'));
+
+        // Initial setup on load
+        function initDashboard() {
+            initTheme();
+            renderRadar();
+            renderDonut();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initDashboard);
+        } else {
+            initDashboard();
         }
     </script>
 </body>
