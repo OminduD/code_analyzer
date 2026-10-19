@@ -33,6 +33,12 @@ report.json
 report.html
 *_report.html
 *_report.json
+*.report.html
+*.report.json
+reports/
+audit-*.html
+detailed_report.html
+out_report.json
 
 # Environment variables and secrets
 .env

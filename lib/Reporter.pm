@@ -5,6 +5,9 @@ use warnings;
 use Term::ANSIColor;
 use JSON::PP;
 use File::Basename;
+use File::Spec;
+use FindBin;
+use MIME::Base64;
 use Carp;
 
 sub print_terminal {
@@ -140,6 +143,27 @@ sub generate_html {
         clones  => [],
         summary => { total_clones => 0, highest_similarity => 0, originality_score => 100, duplicated_loc => 0, files_with_clones => 0 }
     };
+
+    # Load and encode logo from components/ui/logo-white.webp for standalone embedding
+    my $logo_data_uri = '';
+    my @candidate_logo_paths = (
+        File::Spec->catfile($FindBin::Bin, '..', 'components', 'ui', 'logo-white.webp'),
+        File::Spec->catfile('components', 'ui', 'logo-white.webp'),
+        '/home/omindu/Documents/Perl/code_analyzer/components/ui/logo-white.webp',
+    );
+    for my $lpath (@candidate_logo_paths) {
+        if (-f $lpath && open(my $lfh, '<:raw', $lpath)) {
+            local $/;
+            my $raw_logo = <$lfh>;
+            close $lfh;
+            $logo_data_uri = 'data:image/webp;base64,' . MIME::Base64::encode_base64($raw_logo, '');
+            last;
+        }
+    }
+
+    my $logo_img_tag = $logo_data_uri
+        ? qq{<img src="$logo_data_uri" alt="OminduD Logo" class="footer-logo-img">}
+        : qq{<span style="font-family: 'JetBrains Mono', monospace; font-weight: 900; color: #fff; font-size: 1.1rem;">OD</span>};
 
     my $vuln_rows = '';
     my %counts = ( CRITICAL => 0, HIGH => 0, MEDIUM => 0, LOW => 0 );
@@ -1101,14 +1125,206 @@ HTML
             padding: 4px 8px;
         }
 
-        .footer {
-            text-align: center;
+        /* PAGINATION CONTROLS */
+        .pagination-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-top: 20px;
+            padding-top: 18px;
+            border-top: 2px solid var(--border-color);
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.8rem;
-            font-weight: 700;
+        }
+
+        .pagination-info {
             color: var(--text-secondary);
-            padding: 20px 0;
-            letter-spacing: 0.05em;
+            font-weight: 700;
+        }
+
+        .pagination-info strong, .pagination-info span {
+            color: var(--text-primary);
+            font-weight: 800;
+        }
+
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .page-btn {
+            background: var(--bg-page);
+            border: 2px solid var(--border-color);
+            padding: 6px 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 2px 2px 0 0 var(--shadow-color);
+            transition: all 0.15s ease;
+            text-transform: uppercase;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--text-primary);
+        }
+
+        .page-btn:hover:not(:disabled) {
+            background: var(--text-primary);
+            color: var(--bg-card);
+            transform: translate(-1px, -1px);
+            box-shadow: 3px 3px 0 0 var(--shadow-color);
+        }
+
+        .page-btn.active {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--border-color);
+            transform: translate(1px, 1px);
+            box-shadow: 1px 1px 0 0 var(--shadow-color);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        .page-numbers {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .page-ellipsis {
+            padding: 0 6px;
+            color: var(--text-secondary);
+            font-weight: 800;
+            user-select: none;
+        }
+
+        /* COMPACT SLEEK FOOTER */
+        .footer-card {
+            background: var(--bg-card);
+            border: 2px solid var(--border-color);
+            box-shadow: 4px 4px 0px 0px var(--shadow-color);
+            padding: 10px 18px;
+            margin-top: 14px;
+            margin-bottom: 24px;
+            transition: all 0.15s ease;
+        }
+
+        .footer-card:hover {
+            transform: translate(-1px, -1px);
+            box-shadow: 5px 5px 0px 0px var(--shadow-color);
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .footer-brand-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            font-weight: 700;
+            transition: all 0.15s ease;
+            cursor: pointer;
+        }
+
+        .footer-brand-link:hover .footer-author-name {
+            background: var(--text-primary);
+            color: var(--bg-card);
+            transform: translate(-1px, -1px);
+            box-shadow: 3px 3px 0px 0px var(--shadow-color);
+        }
+
+        .footer-brand-link:hover .footer-logo-frame {
+            transform: scale(1.08) rotate(-3deg);
+            border-color: var(--accent);
+        }
+
+        .footer-logo-frame {
+            width: 32px;
+            height: 32px;
+            background: #000000;
+            border: 2px solid var(--border-color);
+            box-shadow: 2px 2px 0px 0px var(--shadow-color);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px;
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+        }
+
+        .footer-logo-img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .footer-created-text {
+            color: var(--text-primary);
+            letter-spacing: 0.02em;
+        }
+
+        .footer-author-name {
+            font-weight: 900;
+            background: var(--accent);
+            color: #000000;
+            padding: 2px 8px;
+            border: 2px solid var(--border-color);
+            box-shadow: 2px 2px 0px 0px var(--shadow-color);
+            border-radius: 4px;
+            letter-spacing: 0.04em;
+            transition: all 0.15s ease;
+            display: inline-block;
+        }
+
+        .footer-badges {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .footer-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 4px 10px;
+            background: var(--bg-page);
+            border: 2px solid var(--border-color);
+            color: var(--text-primary);
+            box-shadow: 2px 2px 0px 0px var(--shadow-color);
+        }
+
+        .footer-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #22c55e;
+            box-shadow: 0 0 6px #22c55e;
+            display: inline-block;
         }
 
         .hidden { display: none !important; }
@@ -1318,13 +1534,50 @@ HTML
                     </thead>
                     <tbody id="vulnTableBody">
                         $vuln_rows
+                        <tr id="emptyTableRow" class="hidden">
+                            <td colspan="7" style="text-align: center; padding: 36px; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; font-weight: 700;">
+                                🚫 No audit findings match your selected filters.
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
+
+            <!-- PAGINATION BAR (10 records per page) -->
+            <div class="pagination-bar">
+                <div class="pagination-info" id="paginationInfo">
+                    Showing <strong id="pageStart">1</strong>–<strong id="pageEnd">10</strong> of <strong id="totalMatchingCount">0</strong> records
+                </div>
+                <div class="pagination-controls">
+                    <button class="page-btn" id="firstPageBtn" onclick="goToPage(1)" title="First Page">« First</button>
+                    <button class="page-btn" id="prevPageBtn" onclick="changePage(-1)" title="Previous Page">‹ Prev</button>
+                    <div class="page-numbers" id="pageNumbers"></div>
+                    <button class="page-btn" id="nextPageBtn" onclick="changePage(1)" title="Next Page">Next ›</button>
+                    <button class="page-btn" id="lastPageBtn" onclick="goToLastPage()" title="Last Page">Last »</button>
+                </div>
+            </div>
         </section>
 
-        <footer class="footer">
-            Generated autonomously by Perl Static Code Security Analyzer • Neo-Brutalist Bento Edition
+        <!-- COMPACT FOOTER WITH OMINDU D BRANDING & LOGO LINKED TO OMINDU.DEV -->
+        <footer class="footer-card">
+            <div class="footer-content">
+                <a href="https://omindu.dev" target="_blank" rel="noopener noreferrer" class="footer-brand-link" title="Visit omindu.dev">
+                    <div class="footer-logo-frame">
+                        $logo_img_tag
+                    </div>
+                    <span class="footer-created-text">Created by</span>
+                    <span class="footer-author-name">OminduD</span>
+                </a>
+
+                <div class="footer-badges">
+                    <span class="footer-pill">
+                        <span class="footer-dot"></span> Active Protection
+                    </span>
+                    <span class="footer-pill">
+                        Automated Engine
+                    </span>
+                </div>
+            </div>
         </footer>
     </div>
 
@@ -1570,9 +1823,12 @@ HTML
             }
         }
 
-        // 6. TABLE FILTERING & SEARCH
+        // 6. TABLE FILTERING, SEARCH & PAGINATION (10 RECORDS PER PAGE)
+        const PAGE_SIZE = 10;
+        let currentPage = 1;
         let currentSeverityFilter = 'all';
         let currentCategoryFilter = 'all';
+        let matchingRows = [];
 
         function filterCategory(cat, btn) {
             currentCategoryFilter = cat;
@@ -1581,7 +1837,6 @@ HTML
                 group.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
             }
-            updateFilterStatus();
             applyFilters();
         }
 
@@ -1592,16 +1847,7 @@ HTML
                 group.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
             }
-            updateFilterStatus();
             applyFilters();
-        }
-
-        function updateFilterStatus() {
-            const status = document.getElementById('tableFilterStatus');
-            if (!status) return;
-            const catText = currentCategoryFilter === 'all' ? 'All Types' : currentCategoryFilter.toUpperCase();
-            const sevText = currentSeverityFilter === 'all' ? 'All Severities' : currentSeverityFilter.toUpperCase();
-            status.innerText = 'Filters: ' + catText + ' • ' + sevText;
         }
 
         function handleSearch() {
@@ -1610,9 +1856,9 @@ HTML
 
         function applyFilters() {
             const query = (document.getElementById('searchInput').value || '').toLowerCase().trim();
-            const rows = document.querySelectorAll('.vuln-row');
+            const allRows = Array.from(document.querySelectorAll('.vuln-row'));
 
-            rows.forEach(row => {
+            matchingRows = allRows.filter(row => {
                 const sev = row.getAttribute('data-severity');
                 const type = row.getAttribute('data-type');
                 const searchData = (row.getAttribute('data-search') || '').toLowerCase();
@@ -1621,10 +1867,144 @@ HTML
                 const matchesCat = (currentCategoryFilter === 'all' || type === currentCategoryFilter);
                 const matchesSearch = (!query || searchData.includes(query));
 
-                if (matchesSev && matchesCat && matchesSearch) {
-                    row.classList.remove('hidden');
+                return matchesSev && matchesCat && matchesSearch;
+            });
+
+            // Reset to page 1 whenever filter or search query changes
+            currentPage = 1;
+            renderPagination();
+        }
+
+        function renderPagination() {
+            const totalRecords = matchingRows.length;
+            const totalPages = Math.ceil(totalRecords / PAGE_SIZE) || 1;
+
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+
+            const startIndex = (currentPage - 1) * PAGE_SIZE;
+            const endIndex = Math.min(startIndex + PAGE_SIZE, totalRecords);
+
+            // Hide all rows first
+            document.querySelectorAll('.vuln-row').forEach(r => r.classList.add('hidden'));
+
+            // Show only the 10 rows for current page
+            for (let i = startIndex; i < endIndex; i++) {
+                matchingRows[i].classList.remove('hidden');
+            }
+
+            // Empty state row toggle
+            const emptyRow = document.getElementById('emptyTableRow');
+            if (emptyRow) {
+                if (totalRecords === 0) {
+                    emptyRow.classList.remove('hidden');
                 } else {
-                    row.classList.add('hidden');
+                    emptyRow.classList.add('hidden');
+                }
+            }
+
+            // Update record count labels
+            const pageStartEl = document.getElementById('pageStart');
+            const pageEndEl = document.getElementById('pageEnd');
+            const totalCountEl = document.getElementById('totalMatchingCount');
+            const tableStatusEl = document.getElementById('tableFilterStatus');
+
+            if (totalRecords === 0) {
+                if (pageStartEl) pageStartEl.innerText = '0';
+                if (pageEndEl) pageEndEl.innerText = '0';
+            } else {
+                if (pageStartEl) pageStartEl.innerText = (startIndex + 1).toString();
+                if (pageEndEl) pageEndEl.innerText = endIndex.toString();
+            }
+            if (totalCountEl) totalCountEl.innerText = totalRecords.toString();
+
+            // Update status text
+            const catText = currentCategoryFilter === 'all' ? 'All Types' : currentCategoryFilter.toUpperCase();
+            const sevText = currentSeverityFilter === 'all' ? 'All Severities' : currentSeverityFilter.toUpperCase();
+            if (tableStatusEl) {
+                tableStatusEl.innerText = 'Filters: ' + catText + ' • ' + sevText + ' (Page ' + currentPage + ' of ' + totalPages + ')';
+            }
+
+            // Update navigation button states
+            const firstBtn = document.getElementById('firstPageBtn');
+            const prevBtn = document.getElementById('prevPageBtn');
+            const nextBtn = document.getElementById('nextPageBtn');
+            const lastBtn = document.getElementById('lastPageBtn');
+
+            if (firstBtn) firstBtn.disabled = (currentPage <= 1);
+            if (prevBtn) prevBtn.disabled = (currentPage <= 1);
+            if (nextBtn) nextBtn.disabled = (currentPage >= totalPages);
+            if (lastBtn) lastBtn.disabled = (currentPage >= totalPages);
+
+            renderPageNumbers(totalPages);
+        }
+
+        function changePage(delta) {
+            const totalPages = Math.ceil(matchingRows.length / PAGE_SIZE) || 1;
+            const targetPage = currentPage + delta;
+            if (targetPage >= 1 && targetPage <= totalPages) {
+                currentPage = targetPage;
+                renderPagination();
+                const panel = document.querySelector('.table-panel');
+                if (panel) {
+                    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+        }
+
+        function goToPage(page) {
+            const totalPages = Math.ceil(matchingRows.length / PAGE_SIZE) || 1;
+            if (page >= 1 && page <= totalPages) {
+                currentPage = page;
+                renderPagination();
+                const panel = document.querySelector('.table-panel');
+                if (panel) {
+                    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+        }
+
+        function goToLastPage() {
+            const totalPages = Math.ceil(matchingRows.length / PAGE_SIZE) || 1;
+            goToPage(totalPages);
+        }
+
+        function renderPageNumbers(totalPages) {
+            const container = document.getElementById('pageNumbers');
+            if (!container) return;
+            container.innerHTML = '';
+
+            if (totalPages <= 1) return;
+
+            const pages = [];
+            if (totalPages <= 7) {
+                for (let i = 1; i <= totalPages; i++) pages.push(i);
+            } else {
+                pages.push(1);
+                if (currentPage > 3) pages.push('...');
+                
+                const start = Math.max(2, currentPage - 1);
+                const end = Math.min(totalPages - 1, currentPage + 1);
+                for (let i = start; i <= end; i++) {
+                    if (!pages.includes(i)) pages.push(i);
+                }
+
+                if (currentPage < totalPages - 2) pages.push('...');
+                if (!pages.includes(totalPages)) pages.push(totalPages);
+            }
+
+            pages.forEach(p => {
+                if (p === '...') {
+                    const ellipsis = document.createElement('span');
+                    ellipsis.className = 'page-ellipsis';
+                    ellipsis.innerText = '…';
+                    container.appendChild(ellipsis);
+                } else {
+                    const btn = document.createElement('button');
+                    btn.className = 'page-btn' + (p === currentPage ? ' active' : '');
+                    btn.innerText = p.toString();
+                    btn.onclick = () => goToPage(p);
+                    container.appendChild(btn);
                 }
             });
         }
@@ -1634,6 +2014,7 @@ HTML
             initTheme();
             renderRadar();
             renderDonut();
+            applyFilters();
         }
 
         if (document.readyState === 'loading') {
